@@ -1,9 +1,10 @@
 /* ============================================
    SANAL GALERİ — MÜZİK OYNATICI
    YouTube IFrame API tabanlı arkaplan müziği
+   Playlist config.json'dan yüklenir.
    ============================================ */
 
-const PLAYLIST = [
+const DEFAULT_PLAYLIST = [
   { id: 'HkklqoIQFpA', title: 'Erik Satie — Gymnopédies & Gnossiennes' },
   { id: 'jgpJVI3tDbY', title: 'Debussy — Clair de Lune & Preludes'      },
   { id: '4Tr0otuiQuU', title: 'Chopin — Nocturnes (Piano)'               },
@@ -11,15 +12,17 @@ const PLAYLIST = [
   { id: 'lCOF9LN_Zxs', title: 'Peaceful Piano — Instrumental'            },
 ];
 
-let player       = null;
-let currentIndex = 0;
-let isPlaying    = false;
-let isMuted      = false;
+let PLAYLIST      = DEFAULT_PLAYLIST;
+let player        = null;
+let currentIndex  = 0;
+let isPlaying     = false;
+let isMuted       = false;
+let playerReady   = false;
 
 /* ── LocalStorage tercih yükle ─────────────── */
 const savedVolume = parseInt(localStorage.getItem('mw-volume') ?? '50', 10);
 const savedMute   = localStorage.getItem('mw-mute') === 'true';
-const savedOpen   = localStorage.getItem('mw-open') !== 'false'; // varsayılan açık
+const savedOpen   = localStorage.getItem('mw-open') !== 'false';
 
 /* ── DOM referansları ───────────────────────── */
 const elWidget  = document.getElementById('music-widget');
@@ -34,8 +37,18 @@ const elTrack   = document.getElementById('mw-track');
 
 /* ── Başlangıç UI ───────────────────────────── */
 elVolume.value = savedVolume;
-setTrackLabel();
 if (!savedOpen) collapse();
+
+/* ── config.json'dan playlist yükle ────────── */
+fetch('config.json')
+  .then(r => r.ok ? r.json() : null)
+  .then(cfg => {
+    if (cfg && Array.isArray(cfg.musicPlaylist) && cfg.musicPlaylist.length > 0) {
+      PLAYLIST = cfg.musicPlaylist;
+    }
+    setTrackLabel();
+  })
+  .catch(() => setTrackLabel());
 
 /* ── YouTube IFrame API hazır callback ─────── */
 window.onYouTubeIframeAPIReady = function () {
@@ -59,6 +72,7 @@ window.onYouTubeIframeAPIReady = function () {
 };
 
 function onPlayerReady(e) {
+  playerReady = true;
   e.target.setVolume(savedVolume);
   if (savedMute) {
     e.target.mute();
@@ -70,14 +84,14 @@ function onPlayerReady(e) {
 function onStateChange(e) {
   if (e.data === YT.PlayerState.PLAYING) {
     isPlaying = true;
-    elPlay.textContent = '⏸';
+    elPlay.innerHTML = '&#9646;&#9646;';
     elPlay.setAttribute('aria-label', 'Durdur');
   } else if (
     e.data === YT.PlayerState.PAUSED ||
     e.data === YT.PlayerState.CUED
   ) {
     isPlaying = false;
-    elPlay.textContent = '▶';
+    elPlay.innerHTML = '&#9654;';
     elPlay.setAttribute('aria-label', 'Oynat');
   } else if (e.data === YT.PlayerState.ENDED) {
     nextTrack();
@@ -86,7 +100,9 @@ function onStateChange(e) {
 
 /* ── Parça yükleme ──────────────────────────── */
 function loadTrack(autoplay) {
-  if (!player) return;
+  if (!player || !playerReady) return;
+  // PLAYLIST değişmiş olabilir, index sıfırla
+  if (currentIndex >= PLAYLIST.length) currentIndex = 0;
   setTrackLabel();
   if (autoplay) {
     player.loadVideoById(PLAYLIST[currentIndex].id);
@@ -96,12 +112,17 @@ function loadTrack(autoplay) {
 }
 
 function setTrackLabel() {
+  if (PLAYLIST.length === 0) {
+    elTrack.textContent = '—';
+    return;
+  }
+  if (currentIndex >= PLAYLIST.length) currentIndex = 0;
   elTrack.textContent = PLAYLIST[currentIndex].title;
 }
 
 /* ── Kontrol fonksiyonları ──────────────────── */
 function togglePlay() {
-  if (!player) return;
+  if (!player || !playerReady) return;
   if (isPlaying) {
     player.pauseVideo();
   } else {
@@ -110,17 +131,19 @@ function togglePlay() {
 }
 
 function prevTrack() {
+  if (PLAYLIST.length === 0) return;
   currentIndex = (currentIndex - 1 + PLAYLIST.length) % PLAYLIST.length;
   loadTrack(isPlaying);
 }
 
 function nextTrack() {
+  if (PLAYLIST.length === 0) return;
   currentIndex = (currentIndex + 1) % PLAYLIST.length;
   loadTrack(isPlaying);
 }
 
 function toggleMute() {
-  if (!player) return;
+  if (!player || !playerReady) return;
   if (isMuted) {
     player.unMute();
     isMuted = false;
@@ -133,12 +156,12 @@ function toggleMute() {
 }
 
 function updateMuteBtn() {
-  elMute.textContent = isMuted ? '🔇' : '🔊';
+  elMute.innerHTML = isMuted ? '&#128263;' : '&#128266;';
   elMute.setAttribute('aria-label', isMuted ? 'Sesi aç' : 'Sesi kapat');
 }
 
 function onVolumeChange() {
-  if (!player) return;
+  if (!player || !playerReady) return;
   const v = parseInt(elVolume.value, 10);
   player.setVolume(v);
   localStorage.setItem('mw-volume', v);
@@ -154,15 +177,15 @@ function onVolumeChange() {
 
 /* ── Widget collapse/expand ─────────────────── */
 function collapse() {
-  elBody.style.display    = 'none';
-  elToggle.textContent    = '▲';
+  elBody.style.display = 'none';
+  elToggle.innerHTML   = '&#9650;';
   elToggle.setAttribute('aria-label', 'Müziği göster');
   localStorage.setItem('mw-open', 'false');
 }
 
 function expand() {
-  elBody.style.display    = '';
-  elToggle.textContent    = '▼';
+  elBody.style.display = '';
+  elToggle.innerHTML   = '&#9660;';
   elToggle.setAttribute('aria-label', 'Müziği gizle');
   localStorage.setItem('mw-open', 'true');
 }

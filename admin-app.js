@@ -541,10 +541,12 @@ document.getElementById('btn-logout').addEventListener('click', () => {
 
 /* ─── AYARLAR ────────────────────────────────────────────── */
 
+let settingsPlaylist = []; // modal açıkken düzenlenen geçici liste
+
 document.getElementById('btn-settings').addEventListener('click', async () => {
   document.getElementById('settings-error').classList.add('hidden');
+  settingsPlaylist = [];
 
-  // Mevcut okul adını yükle
   try {
     const file = await fetch(
       `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/config.json`,
@@ -554,11 +556,72 @@ document.getElementById('btn-settings').addEventListener('click', async () => {
       const data = await file.json();
       const config = JSON.parse(decodeURIComponent(escape(atob(data.content.replace(/\n/g, '')))));
       document.getElementById('settings-school-name').value = config.schoolName || '';
+      settingsPlaylist = Array.isArray(config.musicPlaylist) ? config.musicPlaylist.map(t => ({ ...t })) : [];
     }
   } catch {}
 
+  renderPlaylist();
   document.getElementById('modal-settings').classList.remove('hidden');
   document.getElementById('settings-school-name').focus();
+});
+
+function renderPlaylist() {
+  const list = document.getElementById('playlist-list');
+  list.innerHTML = '';
+
+  if (settingsPlaylist.length === 0) {
+    list.innerHTML = '<p class="playlist-empty">Henüz parça yok.</p>';
+    return;
+  }
+
+  settingsPlaylist.forEach((track, i) => {
+    const row = document.createElement('div');
+    row.className = 'playlist-row';
+    row.innerHTML = `
+      <span class="playlist-row-num">${i + 1}</span>
+      <input type="text" class="playlist-row-id"    value="${escHtml(track.id)}"    placeholder="Video ID"   data-index="${i}" data-field="id" />
+      <input type="text" class="playlist-row-title" value="${escHtml(track.title)}" placeholder="Parça Adı" data-index="${i}" data-field="title" />
+      <button class="btn-icon-delete playlist-row-del" data-index="${i}" title="Sil">✕</button>
+    `;
+    row.querySelectorAll('input').forEach(inp => {
+      inp.addEventListener('input', e => {
+        settingsPlaylist[e.target.dataset.index][e.target.dataset.field] = e.target.value;
+      });
+    });
+    row.querySelector('.playlist-row-del').addEventListener('click', e => {
+      settingsPlaylist.splice(parseInt(e.currentTarget.dataset.index, 10), 1);
+      renderPlaylist();
+    });
+    list.appendChild(row);
+  });
+}
+
+function escHtml(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+document.getElementById('btn-add-track').addEventListener('click', () => {
+  const idEl    = document.getElementById('new-track-id');
+  const titleEl = document.getElementById('new-track-title');
+  const id      = idEl.value.trim();
+  const title   = titleEl.value.trim();
+
+  if (!id) { idEl.focus(); return; }
+
+  // YouTube URL yapıştırıldıysa ID'yi çıkar
+  const parsed = id.match(/(?:v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+  const cleanId = parsed ? parsed[1] : id;
+
+  settingsPlaylist.push({ id: cleanId, title: title || cleanId });
+  idEl.value    = '';
+  titleEl.value = '';
+  renderPlaylist();
+  idEl.focus();
+});
+
+// Enter ile hızlı ekleme
+document.getElementById('new-track-title').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('btn-add-track').click();
 });
 
 document.getElementById('btn-settings-cancel').addEventListener('click', () => {
@@ -585,13 +648,17 @@ document.getElementById('btn-settings-save').addEventListener('click', async () 
   btn.textContent = 'Kaydediliyor…';
 
   try {
+    const config = {
+      schoolName,
+      musicPlaylist: settingsPlaylist.filter(t => t.id.trim())
+    };
     await ghPut(
       'config.json',
-      JSON.stringify({ schoolName }, null, 2),
-      `Yönetim: okul adı güncellendi`
+      JSON.stringify(config, null, 2),
+      'Yönetim: ayarlar güncellendi'
     );
     document.getElementById('modal-settings').classList.add('hidden');
-    toast('Okul adı kaydedildi. Galeri 1-2 dakika içinde güncellenir.');
+    toast('Ayarlar kaydedildi. Galeri 1-2 dakika içinde güncellenir.');
   } catch (err) {
     errEl.textContent = 'Kayıt hatası: ' + err.message;
     errEl.classList.remove('hidden');
