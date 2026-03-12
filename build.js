@@ -15,6 +15,18 @@ const path = require('path');
 
 const EXTS = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif'];
 
+// config.json'dan okul adını al
+let schoolName = 'Sanal Galeri';
+const configPath = path.join(__dirname, 'config.json');
+if (fs.existsSync(configPath)) {
+  try {
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    if (config.schoolName) schoolName = config.schoolName;
+  } catch (e) {
+    console.warn('Uyarı: config.json okunamadı.');
+  }
+}
+
 function formatName(folder) {
   return folder
     .replace(/^\d+[-_]/, '')          // baştaki "01-" gibi sıra önekini kaldır
@@ -65,7 +77,7 @@ if (fs.existsSync(imagesDir)) {
 
 fs.writeFileSync(
   path.join(__dirname, 'images-list.js'),
-  `const EXHIBITIONS = ${JSON.stringify(exhibitions, null, 2)};\n`
+  `const SCHOOL_NAME = ${JSON.stringify(schoolName)};\nconst EXHIBITIONS = ${JSON.stringify(exhibitions, null, 2)};\n`
 );
 
 console.log(`${exhibitions.length} sergi listelendi.`);

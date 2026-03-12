@@ -37,6 +37,7 @@
       </div>
       <div class="admin-header-right">
         <button id="btn-new-exhibition" class="btn-primary">+ Yeni Sergi</button>
+        <button id="btn-settings" class="btn-ghost">Ayarlar</button>
         <button id="btn-logout" class="btn-ghost">Çıkış</button>
       </div>
     </div>
@@ -127,6 +128,22 @@
         <button id="btn-modal-create" class="btn-primary">Oluştur</button>
       </div>
       <p id="modal-error" class="error-msg hidden"></p>
+    </div>
+  </div>
+
+  <!-- AYARLAR MODALİ -->
+  <div id="modal-settings" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h2>Genel Ayarlar</h2>
+      <div class="field-group">
+        <label for="settings-school-name">Okul Adı</label>
+        <input type="text" id="settings-school-name" placeholder="Aziz Sancar Anadolu Lisesi" />
+      </div>
+      <div class="modal-actions">
+        <button id="btn-settings-cancel" class="btn-ghost">İptal</button>
+        <button id="btn-settings-save" class="btn-primary">Kaydet</button>
+      </div>
+      <p id="settings-error" class="error-msg hidden"></p>
     </div>
   </div>
 

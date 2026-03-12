@@ -40,6 +40,11 @@
   </div>
 
   <script src="images-list.js"></script>
+  <script>
+    if (typeof SCHOOL_NAME !== 'undefined') {
+      document.querySelector('.school-name').textContent = SCHOOL_NAME;
+    }
+  </script>
   <script src="script.js"></script>
 </body>
 </html>

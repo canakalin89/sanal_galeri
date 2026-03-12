@@ -539,6 +539,68 @@ document.getElementById('btn-logout').addEventListener('click', () => {
   showPage('page-login');
 });
 
+/* ─── AYARLAR ────────────────────────────────────────────── */
+
+document.getElementById('btn-settings').addEventListener('click', async () => {
+  document.getElementById('settings-error').classList.add('hidden');
+
+  // Mevcut okul adını yükle
+  try {
+    const file = await fetch(
+      `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/config.json`,
+      { headers: ghHeaders() }
+    );
+    if (file.ok) {
+      const data = await file.json();
+      const config = JSON.parse(decodeURIComponent(escape(atob(data.content.replace(/\n/g, '')))));
+      document.getElementById('settings-school-name').value = config.schoolName || '';
+    }
+  } catch {}
+
+  document.getElementById('modal-settings').classList.remove('hidden');
+  document.getElementById('settings-school-name').focus();
+});
+
+document.getElementById('btn-settings-cancel').addEventListener('click', () => {
+  document.getElementById('modal-settings').classList.add('hidden');
+});
+
+document.getElementById('modal-settings').addEventListener('click', e => {
+  if (e.target === e.currentTarget) e.currentTarget.classList.add('hidden');
+});
+
+document.getElementById('btn-settings-save').addEventListener('click', async () => {
+  const schoolName = document.getElementById('settings-school-name').value.trim();
+  const errEl = document.getElementById('settings-error');
+  errEl.classList.add('hidden');
+
+  if (!schoolName) {
+    errEl.textContent = 'Okul adı boş olamaz.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  const btn = document.getElementById('btn-settings-save');
+  btn.disabled = true;
+  btn.textContent = 'Kaydediliyor…';
+
+  try {
+    await ghPut(
+      'config.json',
+      JSON.stringify({ schoolName }, null, 2),
+      `Yönetim: okul adı güncellendi`
+    );
+    document.getElementById('modal-settings').classList.add('hidden');
+    toast('Okul adı kaydedildi. Galeri 1-2 dakika içinde güncellenir.');
+  } catch (err) {
+    errEl.textContent = 'Kayıt hatası: ' + err.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Kaydet';
+  }
+});
+
 /* ─── YARDIMCI ───────────────────────────────────────────── */
 
 function formatFolderName(folder) {
