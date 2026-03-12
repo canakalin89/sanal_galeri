@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sanal Galeri</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ANA SAYFA: Sergi listesi -->
+  <div id="view-home">
+    <header>
+      <h1>Sanal Galeri</h1>
+    </header>
+    <div class="exhibitions" id="exhibitions"></div>
+  </div>
+
+  <!-- GALERİ SAYFASI: Seçilen sergi -->
+  <div id="view-gallery" class="hidden">
+    <div class="gallery-header">
+      <button id="btn-back" aria-label="Geri">&#8592;</button>
+      <h2 id="gallery-title"></h2>
+    </div>
+    <main class="masonry-grid" id="gallery"></main>
+  </div>
+
+  <!-- Lightbox -->
+  <div class="lightbox" id="lightbox">
+    <div class="lb-overlay" id="lb-overlay"></div>
+    <button class="lb-close" id="lb-close" aria-label="Kapat">&#x2715;</button>
+    <button class="lb-nav lb-prev" id="lb-prev" aria-label="Önceki">&#8249;</button>
+    <button class="lb-nav lb-next" id="lb-next" aria-label="Sonraki">&#8250;</button>
+    <img class="lb-img" id="lb-img" src="" alt="" />
+  </div>
+
+  <script src="images-list.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
