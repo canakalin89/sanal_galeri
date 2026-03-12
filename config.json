@@ -1,10 +1,10 @@
 {
   "schoolName": "Aziz Sancar Anadolu Lisesi",
   "musicPlaylist": [
+    { "id": "S-ub50cA9Sw", "title": "Klasik Müzik — Galeri Ortamı" },
     { "id": "HkklqoIQFpA", "title": "Erik Satie — Gymnopédies & Gnossiennes" },
     { "id": "jgpJVI3tDbY", "title": "Debussy — Clair de Lune & Preludes" },
     { "id": "4Tr0otuiQuU", "title": "Chopin — Nocturnes (Piano)" },
-    { "id": "bg9xKSh6HMQ", "title": "Ambient Classical — Gallery Mood" },
     { "id": "lCOF9LN_Zxs", "title": "Peaceful Piano — Instrumental" }
   ]
 }
