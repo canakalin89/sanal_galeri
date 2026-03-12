@@ -387,6 +387,43 @@ header h1 {
   display: none;
 }
 
+/* ── FOOTER ──────────────────────────────── */
+.site-footer {
+  background: var(--header-bg);
+  border-top: 1px solid rgba(201, 168, 76, 0.2);
+  text-align: center;
+  padding: 1.6rem 2rem;
+}
+
+.footer-link {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  text-decoration: none;
+  color: var(--muted);
+  transition: color 0.2s;
+}
+
+.footer-link:hover {
+  color: var(--gold);
+}
+
+.footer-label {
+  font-size: 0.65rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: inherit;
+  opacity: 0.6;
+}
+
+.footer-name {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 0.95rem;
+  letter-spacing: 0.12em;
+  color: inherit;
+}
+
 /* ── RESPONSIVE ──────────────────────────── */
 @media (max-width: 600px) {
   header {
