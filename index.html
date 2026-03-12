@@ -39,7 +39,25 @@
     <div class="lb-caption" id="lb-caption" aria-live="polite"></div>
   </div>
 
-<footer class="site-footer">
+  <!-- Radyo Widget -->
+  <div class="radio-widget" id="radio-widget">
+    <div class="radio-header">
+      <span class="radio-icon" aria-hidden="true">&#9834;</span>
+      <span class="radio-title">Galeri Müziği</span>
+      <button class="radio-toggle" id="radio-toggle" aria-label="Müziği gizle">&#9660;</button>
+    </div>
+    <div class="radio-body" id="radio-body">
+      <iframe
+        src="https://radio-player.europeana.eu/"
+        frameborder="0"
+        class="radio-iframe"
+        title="Europeana Radyo"
+        allow="autoplay"
+      ></iframe>
+    </div>
+  </div>
+
+  <footer class="site-footer">
     <a href="https://www.instagram.com/can_akalin" target="_blank" rel="noopener noreferrer" class="footer-link">
       <span class="footer-label">Tasarım &amp; Geliştirme</span>
       <span class="footer-name">Can Akalin</span>
@@ -53,5 +71,26 @@
     }
   </script>
   <script src="script.js"></script>
+  <script>
+    (function () {
+      var body   = document.getElementById('radio-body');
+      var toggle = document.getElementById('radio-toggle');
+      var open   = localStorage.getItem('radio-open') !== 'false';
+      if (!open) { body.style.display = 'none'; toggle.innerHTML = '&#9650;'; }
+      toggle.addEventListener('click', function () {
+        if (body.style.display === 'none') {
+          body.style.display = '';
+          toggle.innerHTML = '&#9660;';
+          toggle.setAttribute('aria-label', 'Müziği gizle');
+          localStorage.setItem('radio-open', 'true');
+        } else {
+          body.style.display = 'none';
+          toggle.innerHTML = '&#9650;';
+          toggle.setAttribute('aria-label', 'Müziği göster');
+          localStorage.setItem('radio-open', 'false');
+        }
+      });
+    })();
+  </script>
 </body>
 </html>
