@@ -424,6 +424,155 @@ header h1 {
   color: inherit;
 }
 
+/* ── MÜZİK WİDGET ────────────────────────── */
+.music-widget {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  width: 268px;
+  background: var(--header-bg);
+  border: 1px solid rgba(201, 168, 76, 0.3);
+  border-radius: 6px;
+  z-index: 1000;
+  box-shadow: 0 4px 28px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+
+.music-widget:hover {
+  box-shadow: 0 6px 36px rgba(0, 0, 0, 0.65);
+}
+
+.mw-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid rgba(201, 168, 76, 0.15);
+  cursor: default;
+}
+
+.mw-icon {
+  color: var(--gold);
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.mw-title {
+  flex: 1;
+  font-size: 0.65rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(240, 237, 232, 0.55);
+}
+
+.mw-toggle {
+  background: transparent;
+  border: none;
+  color: rgba(240, 237, 232, 0.4);
+  font-size: 0.65rem;
+  cursor: pointer;
+  padding: 2px 4px;
+  line-height: 1;
+  transition: color 0.2s;
+}
+
+.mw-toggle:hover {
+  color: var(--gold);
+}
+
+.mw-body {
+  padding: 0.7rem 0.85rem 0.85rem;
+}
+
+.mw-track {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 0.75rem;
+  font-style: italic;
+  color: rgba(240, 237, 232, 0.7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 0.6rem;
+  min-height: 1em;
+}
+
+.mw-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.mw-btn {
+  background: transparent;
+  border: 1px solid rgba(201, 168, 76, 0.2);
+  color: rgba(240, 237, 232, 0.75);
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  font-size: 0.75rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+  line-height: 1;
+}
+
+.mw-btn:hover {
+  background: rgba(201, 168, 76, 0.12);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.mw-play-btn {
+  width: 34px;
+  height: 34px;
+  font-size: 0.85rem;
+  border-color: rgba(201, 168, 76, 0.4);
+  color: var(--gold);
+}
+
+.mw-play-btn:hover {
+  background: rgba(201, 168, 76, 0.18);
+}
+
+.mw-volume {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 3px;
+  background: rgba(201, 168, 76, 0.2);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  margin-left: 0.15rem;
+}
+
+.mw-volume::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--gold);
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.mw-volume::-webkit-slider-thumb:hover {
+  transform: scale(1.25);
+}
+
+.mw-volume::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--gold);
+  border: none;
+  cursor: pointer;
+}
+
 /* ── RESPONSIVE ──────────────────────────── */
 @media (max-width: 600px) {
   header {

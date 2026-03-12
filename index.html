@@ -39,6 +39,33 @@
     <div class="lb-caption" id="lb-caption" aria-live="polite"></div>
   </div>
 
+  <!-- YouTube IFrame API -->
+  <script src="https://www.youtube.com/iframe_api"></script>
+
+  <!-- Gizli YouTube Player -->
+  <div id="yt-player-container" style="display:none" aria-hidden="true">
+    <div id="yt-player"></div>
+  </div>
+
+  <!-- Müzik Widget -->
+  <div class="music-widget" id="music-widget" role="region" aria-label="Arkaplan müzik oynatıcı">
+    <div class="mw-header">
+      <span class="mw-icon" aria-hidden="true">&#9834;</span>
+      <span class="mw-title">Galeri Müziği</span>
+      <button class="mw-toggle" id="mw-toggle" aria-label="Müziği gizle">&#9660;</button>
+    </div>
+    <div class="mw-body" id="mw-body">
+      <div class="mw-track" id="mw-track" aria-live="polite">—</div>
+      <div class="mw-controls">
+        <button class="mw-btn" id="mw-prev" aria-label="Önceki parça">&#9198;</button>
+        <button class="mw-btn mw-play-btn" id="mw-play" aria-label="Oynat">&#9654;</button>
+        <button class="mw-btn" id="mw-next" aria-label="Sonraki parça">&#9197;</button>
+        <button class="mw-btn" id="mw-mute" aria-label="Sesi kapat">&#128266;</button>
+        <input class="mw-volume" id="mw-volume" type="range" min="0" max="100" value="50" aria-label="Ses seviyesi" />
+      </div>
+    </div>
+  </div>
+
   <footer class="site-footer">
     <a href="https://www.instagram.com/can_akalin" target="_blank" rel="noopener noreferrer" class="footer-link">
       <span class="footer-label">Tasarım &amp; Geliştirme</span>
@@ -53,5 +80,6 @@
     }
   </script>
   <script src="script.js"></script>
+  <script src="music-player.js"></script>
 </body>
 </html>
