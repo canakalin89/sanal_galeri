@@ -58,6 +58,8 @@ fetch('config.json')
 
 /* ── YouTube Player başlatma ────────────────── */
 function initYTPlayer() {
+  if (player) return; // çift çağrıyı önle
+  elTrack.textContent = 'Player yükleniyor…';
   player = new YT.Player('yt-player', {
     height    : '200',
     width     : '200',
@@ -78,12 +80,16 @@ function initYTPlayer() {
 }
 
 /* ── YouTube IFrame API hazır callback ─────── */
-// API cache'den yüklenmişse callback çalışmaz — ikisini de kontrol et
-if (window.YT && window.YT.Player) {
-  initYTPlayer();
-} else {
-  window.onYouTubeIframeAPIReady = initYTPlayer;
-}
+// Hem callback hem polling — API cache'den gelip callback kaçmış olabilir
+window.onYouTubeIframeAPIReady = initYTPlayer;
+
+(function pollYT() {
+  if (window.YT && window.YT.Player) {
+    initYTPlayer();
+  } else {
+    setTimeout(pollYT, 300);
+  }
+})();
 
 function onPlayerReady(e) {
   playerReady = true;
