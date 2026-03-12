@@ -27,11 +27,37 @@ body {
 
 .hidden { display: none !important; }
 
+/* ── FOCUS (erişilebilirlik) ─────────────── */
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
+
+.gallery-item:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+  border-radius: var(--radius);
+}
+
+.lb-close:focus-visible,
+.lb-nav:focus-visible {
+  outline-offset: 4px;
+}
+
 /* ── HEADER ─────────────────────────────── */
 header {
   text-align: center;
   padding: 3rem 1rem 2rem;
   border-bottom: 1px solid var(--border);
+}
+
+.school-name {
+  font-size: 0.8rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-family: system-ui, sans-serif;
+  margin-bottom: 0.4rem;
 }
 
 header h1 {
@@ -73,12 +99,17 @@ header h1 {
 .card-thumb {
   position: absolute;
   inset: 0;
-  background-size: cover;
-  background-position: center;
+  overflow: hidden;
+}
+
+.card-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   transition: transform 0.4s ease;
 }
 
-.exhibition-card:hover .card-thumb {
+.exhibition-card:hover .card-thumb img {
   transform: scale(1.04);
 }
 
@@ -96,6 +127,13 @@ header h1 {
 
 .exhibition-card:hover .card-info {
   opacity: 1;
+}
+
+/* Dokunmatik cihazlarda hover yok — kart bilgisi her zaman görünür */
+@media (hover: none) {
+  .card-info {
+    opacity: 1;
+  }
 }
 
 .card-name {
@@ -116,10 +154,16 @@ header h1 {
 /* ── GALERİ BAŞLIĞI ─────────────────────── */
 .gallery-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 1rem;
   padding: 1.2rem 1.4rem;
   border-bottom: 1px solid var(--border);
+}
+
+.gallery-header-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 #btn-back {
@@ -136,6 +180,7 @@ header h1 {
   justify-content: center;
   transition: color 0.2s, border-color 0.2s;
   flex-shrink: 0;
+  margin-top: 2px;
 }
 
 #btn-back:hover {
@@ -149,6 +194,14 @@ header h1 {
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--gold);
+}
+
+.gallery-desc {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-style: italic;
+  letter-spacing: 0.03em;
+  margin-top: 0.3rem;
 }
 
 /* ── MASONRY GRID ────────────────────────── */
@@ -260,6 +313,22 @@ header h1 {
 .lb-nav:hover { background: rgba(255,255,255,0.18); }
 .lb-prev { left: 0.8rem; }
 .lb-next { right: 0.8rem; }
+
+.lb-caption {
+  position: fixed;
+  bottom: 1.2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  color: rgba(255,255,255,0.75);
+  font-size: 0.85rem;
+  font-style: italic;
+  letter-spacing: 0.04em;
+  text-align: center;
+  pointer-events: none;
+  min-height: 1.2em;
+  white-space: nowrap;
+}
 
 /* ── RESPONSIVE ──────────────────────────── */
 @media (max-width: 480px) {

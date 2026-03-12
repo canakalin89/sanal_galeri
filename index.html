@@ -11,6 +11,7 @@
   <!-- ANA SAYFA: Sergi listesi -->
   <div id="view-home">
     <header>
+      <p class="school-name">Aziz Sancar Anadolu Lisesi</p>
       <h1>Sanal Galeri</h1>
     </header>
     <div class="exhibitions" id="exhibitions"></div>
@@ -20,18 +21,22 @@
   <div id="view-gallery" class="hidden">
     <div class="gallery-header">
       <button id="btn-back" aria-label="Geri">&#8592;</button>
-      <h2 id="gallery-title"></h2>
+      <div class="gallery-header-text">
+        <h2 id="gallery-title"></h2>
+        <p id="gallery-desc" class="gallery-desc hidden"></p>
+      </div>
     </div>
     <main class="masonry-grid" id="gallery"></main>
   </div>
 
   <!-- Lightbox -->
-  <div class="lightbox" id="lightbox">
+  <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Eser görüntüleyici">
     <div class="lb-overlay" id="lb-overlay"></div>
     <button class="lb-close" id="lb-close" aria-label="Kapat">&#x2715;</button>
     <button class="lb-nav lb-prev" id="lb-prev" aria-label="Önceki">&#8249;</button>
     <button class="lb-nav lb-next" id="lb-next" aria-label="Sonraki">&#8250;</button>
     <img class="lb-img" id="lb-img" src="" alt="" />
+    <div class="lb-caption" id="lb-caption" aria-live="polite"></div>
   </div>
 
   <script src="images-list.js"></script>
