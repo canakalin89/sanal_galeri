@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Yönetim Paneli — Sanal Galeri</title>
+  <link rel="stylesheet" href="admin.css" />
+</head>
+<body>
+
+  <!-- GİRİŞ SAYFASI -->
+  <div id="page-login" class="page">
+    <div class="login-card">
+      <p class="login-school">Aziz Sancar Anadolu Lisesi</p>
+      <h1>Yönetim Paneli</h1>
+      <p class="login-sub">Sanal Galeri</p>
+      <form id="form-login">
+        <input
+          type="password"
+          id="input-password"
+          placeholder="Şifre"
+          autocomplete="current-password"
+          required
+        />
+        <button type="submit" id="btn-login">Giriş Yap</button>
+        <p id="login-error" class="error-msg hidden"></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- DASHBOARD: Sergi listesi -->
+  <div id="page-dashboard" class="page hidden">
+    <div class="admin-header">
+      <div class="admin-header-left">
+        <h1>Sergiler</h1>
+      </div>
+      <div class="admin-header-right">
+        <button id="btn-new-exhibition" class="btn-primary">+ Yeni Sergi</button>
+        <button id="btn-logout" class="btn-ghost">Çıkış</button>
+      </div>
+    </div>
+
+    <div id="dashboard-loading" class="loading-state">
+      <div class="spinner"></div>
+      <p>Sergiler yükleniyor…</p>
+    </div>
+
+    <div id="dashboard-empty" class="empty-state hidden">
+      <p>Henüz sergi yok.</p>
+      <button class="btn-primary" onclick="document.getElementById('btn-new-exhibition').click()">İlk sergiyi oluştur</button>
+    </div>
+
+    <div id="exhibitions-grid" class="hidden"></div>
+  </div>
+
+  <!-- EDİTÖR: Sergi düzenleme -->
+  <div id="page-editor" class="page hidden">
+    <div class="admin-header">
+      <div class="admin-header-left">
+        <button id="btn-back" class="btn-ghost btn-back">← Sergiler</button>
+        <h1 id="editor-exhibition-name">Sergi Düzenle</h1>
+      </div>
+      <div class="admin-header-right">
+        <button id="btn-save" class="btn-primary">Kaydet</button>
+        <button id="btn-delete-exhibition" class="btn-danger">Sergiyi Sil</button>
+      </div>
+    </div>
+
+    <div class="editor-body">
+      <!-- Sergi bilgileri -->
+      <section class="editor-section">
+        <h2>Sergi Bilgileri</h2>
+        <div class="field-row">
+          <div class="field-group">
+            <label for="field-name">Sergi Adı</label>
+            <input type="text" id="field-name" placeholder="Hat Sergisi" />
+          </div>
+        </div>
+        <div class="field-group">
+          <label for="field-description">Açıklama <span class="optional">(isteğe bağlı)</span></label>
+          <textarea id="field-description" rows="3" placeholder="2024-2025 öğretim yılı hat sanatı sergisi."></textarea>
+        </div>
+        <div class="field-row two-col">
+          <div class="field-group">
+            <label for="field-year">Öğretim Yılı <span class="optional">(isteğe bağlı)</span></label>
+            <input type="text" id="field-year" placeholder="2024-2025" />
+          </div>
+          <div class="field-group">
+            <label for="field-class">Sınıf <span class="optional">(isteğe bağlı)</span></label>
+            <input type="text" id="field-class" placeholder="9-A" />
+          </div>
+        </div>
+      </section>
+
+      <!-- Eserler -->
+      <section class="editor-section">
+        <div class="section-header">
+          <h2>Eserler <span id="image-count" class="count-badge"></span></h2>
+          <label class="btn-primary btn-upload-label">
+            Resim Yükle
+            <input type="file" id="file-upload" multiple accept="image/jpeg,image/png,image/webp" hidden />
+          </label>
+        </div>
+        <p class="upload-hint">Maksimum dosya boyutu: 3 MB. Desteklenen formatlar: JPEG, PNG, WebP.</p>
+
+        <div id="editor-loading" class="loading-state hidden">
+          <div class="spinner"></div>
+          <p>Resimler yükleniyor…</p>
+        </div>
+
+        <div id="images-grid" class="images-grid"></div>
+      </section>
+    </div>
+  </div>
+
+  <!-- YENİ SERGİ MODALİ -->
+  <div id="modal-new" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h2>Yeni Sergi Oluştur</h2>
+      <div class="field-group">
+        <label for="new-exhibition-name">Sergi Adı</label>
+        <input type="text" id="new-exhibition-name" placeholder="Hat Sergisi" />
+      </div>
+      <div class="modal-actions">
+        <button id="btn-modal-cancel" class="btn-ghost">İptal</button>
+        <button id="btn-modal-create" class="btn-primary">Oluştur</button>
+      </div>
+      <p id="modal-error" class="error-msg hidden"></p>
+    </div>
+  </div>
+
+  <!-- BİLDİRİM -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="admin-app.js"></script>
+</body>
+</html>

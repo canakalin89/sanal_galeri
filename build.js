@@ -53,7 +53,7 @@ if (fs.existsSync(imagesDir)) {
       if (files.length > 0) {
         exhibitions.push({
           id:          dir.name,
-          name:        formatName(dir.name),
+          name:        meta.name || formatName(dir.name),
           description: meta.description || null,
           year:        meta.year        || null,
           class:       meta.class       || null,
