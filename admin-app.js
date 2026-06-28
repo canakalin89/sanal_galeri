@@ -600,6 +600,232 @@ document.getElementById('btn-settings-save').addEventListener('click', async () 
   }
 });
 
+/* ─── GOOGLE DRIVE İÇE AKTARMA ──────────────────────────── */
+
+let driveFiles = [];
+
+function extractFolderId(input) {
+  input = input.trim();
+  // https://drive.google.com/drive/folders/FOLDER_ID veya doğrudan ID
+  var match = input.match(/folders\/([a-zA-Z0-9_-]+)/);
+  if (match) return match[1];
+  // Sadece ID girilmişse
+  if (/^[a-zA-Z0-9_-]{10,}$/.test(input)) return input;
+  return null;
+}
+
+document.getElementById('btn-drive-import').addEventListener('click', function() {
+  document.getElementById('drive-folder-url').value = '';
+  document.getElementById('drive-link-error').classList.add('hidden');
+  document.getElementById('drive-step-link').classList.remove('hidden');
+  document.getElementById('drive-step-preview').classList.add('hidden');
+  document.getElementById('modal-drive').classList.remove('hidden');
+  document.getElementById('drive-folder-url').focus();
+});
+
+document.getElementById('btn-drive-cancel').addEventListener('click', function() {
+  document.getElementById('modal-drive').classList.add('hidden');
+});
+
+document.getElementById('modal-drive').addEventListener('click', function(e) {
+  if (e.target === e.currentTarget) e.currentTarget.classList.add('hidden');
+});
+
+document.getElementById('btn-drive-scan').addEventListener('click', async function() {
+  var input = document.getElementById('drive-folder-url').value;
+  var errEl = document.getElementById('drive-link-error');
+  errEl.classList.add('hidden');
+
+  var folderId = extractFolderId(input);
+  if (!folderId) {
+    errEl.textContent = 'Geçersiz klasör linki veya ID.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  var btn = this;
+  btn.disabled = true;
+  btn.textContent = 'Taranıyor…';
+
+  document.getElementById('drive-step-link').classList.add('hidden');
+  document.getElementById('drive-step-preview').classList.remove('hidden');
+  document.getElementById('drive-loading').classList.remove('hidden');
+  document.getElementById('drive-results').classList.add('hidden');
+
+  try {
+    var r = await fetch('/api/drive?action=list&folderId=' + encodeURIComponent(folderId));
+    var data = await r.json();
+
+    if (!r.ok) {
+      throw new Error(data.error || 'Drive API hatası');
+    }
+
+    driveFiles = (data.files || []).map(function(f) {
+      f._selected = true;
+      return f;
+    });
+
+    document.getElementById('drive-loading').classList.add('hidden');
+
+    if (driveFiles.length === 0) {
+      document.getElementById('drive-step-preview').classList.add('hidden');
+      document.getElementById('drive-step-link').classList.remove('hidden');
+      errEl.textContent = 'Klasörde görsel bulunamadı. Klasörün paylaşım ayarlarını kontrol edin.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+
+    document.getElementById('drive-found-count').textContent = driveFiles.length + ' görsel bulundu';
+    document.getElementById('drive-select-all').checked = true;
+    document.getElementById('drive-progress').classList.add('hidden');
+    document.getElementById('btn-drive-import-go').disabled = false;
+    document.getElementById('btn-drive-import-go').textContent = 'Seçilenleri İçe Aktar';
+
+    var grid = document.getElementById('drive-thumbs');
+    grid.innerHTML = '';
+
+    driveFiles.forEach(function(file, idx) {
+      var thumb = file.thumbnailLink
+        ? file.thumbnailLink.replace(/=s\d+/, '=s200')
+        : '';
+      var item = document.createElement('div');
+      item.className = 'drive-thumb-item selected';
+      item.dataset.index = idx;
+      item.innerHTML =
+        (thumb ? '<img src="' + thumb + '" alt="' + file.name + '" />' : '') +
+        '<span class="drive-thumb-check">✓</span>' +
+        '<span class="drive-thumb-name">' + file.name + '</span>';
+      item.addEventListener('click', function() {
+        driveFiles[idx]._selected = !driveFiles[idx]._selected;
+        item.classList.toggle('selected', driveFiles[idx]._selected);
+        var allChecked = driveFiles.every(function(f) { return f._selected; });
+        document.getElementById('drive-select-all').checked = allChecked;
+      });
+      grid.appendChild(item);
+    });
+
+    document.getElementById('drive-results').classList.remove('hidden');
+  } catch (err) {
+    document.getElementById('drive-loading').classList.add('hidden');
+    document.getElementById('drive-step-preview').classList.add('hidden');
+    document.getElementById('drive-step-link').classList.remove('hidden');
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Klasörü Tara';
+  }
+});
+
+document.getElementById('drive-select-all').addEventListener('change', function() {
+  var checked = this.checked;
+  driveFiles.forEach(function(f) { f._selected = checked; });
+  document.querySelectorAll('.drive-thumb-item').forEach(function(el) {
+    el.classList.toggle('selected', checked);
+  });
+});
+
+document.getElementById('btn-drive-back').addEventListener('click', function() {
+  document.getElementById('drive-step-preview').classList.add('hidden');
+  document.getElementById('drive-step-link').classList.remove('hidden');
+});
+
+document.getElementById('btn-drive-import-go').addEventListener('click', async function() {
+  if (!currentExhibition) return;
+
+  var selected = driveFiles.filter(function(f) { return f._selected; });
+  if (selected.length === 0) {
+    toast('Hiç görsel seçilmedi.', 'error');
+    return;
+  }
+
+  var btn = this;
+  btn.disabled = true;
+  document.getElementById('btn-drive-back').disabled = true;
+
+  var progressBar = document.getElementById('drive-progress');
+  var progressFill = document.getElementById('drive-progress-fill');
+  var progressText = document.getElementById('drive-progress-text');
+  progressBar.classList.remove('hidden');
+  progressFill.style.width = '0%';
+
+  var success = 0;
+  var failed = 0;
+
+  for (var i = 0; i < selected.length; i++) {
+    var file = selected[i];
+    var pct = Math.round(((i) / selected.length) * 100);
+    progressFill.style.width = pct + '%';
+    progressText.textContent = (i + 1) + ' / ' + selected.length + ' — ' + file.name;
+
+    try {
+      var r = await fetch('/api/drive?action=download&fileId=' + encodeURIComponent(file.id));
+      var data = await r.json();
+
+      if (!r.ok) throw new Error(data.error || 'İndirme hatası');
+
+      // GitHub'a yükle
+      var ext = file.name.split('.').pop().toLowerCase();
+      if (!ext || !['jpg','jpeg','png','webp','gif','avif'].includes(ext)) {
+        var mimeMap = {'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif'};
+        ext = mimeMap[data.contentType] || 'jpg';
+      }
+      var fileName = file.name;
+      if (!/\.(jpg|jpeg|png|webp|gif|avif)$/i.test(fileName)) {
+        fileName = fileName + '.' + ext;
+      }
+
+      // SHA kontrolü ve yükleme
+      var sha = null;
+      try {
+        var existing = await fetch(
+          'https://api.github.com/repos/' + GH.owner + '/' + GH.repo + '/contents/images/' + currentExhibition.id + '/' + encodeURIComponent(fileName),
+          { headers: ghHeaders() }
+        );
+        if (existing.ok) sha = (await existing.json()).sha;
+      } catch (e) {}
+
+      var body = {
+        message: 'Yönetim: ' + currentExhibition.id + ' Drive\'dan eklendi',
+        content: data.base64,
+        branch: GH.branch
+      };
+      if (sha) body.sha = sha;
+
+      var putR = await fetch(
+        'https://api.github.com/repos/' + GH.owner + '/' + GH.repo + '/contents/images/' + currentExhibition.id + '/' + encodeURIComponent(fileName),
+        { method: 'PUT', headers: ghHeaders(), body: JSON.stringify(body) }
+      );
+
+      if (!putR.ok) {
+        var err = await putR.json().catch(function() { return {}; });
+        throw new Error(err.message || 'Yükleme hatası');
+      }
+
+      success++;
+    } catch (err) {
+      failed++;
+      console.error('Drive import hatası (' + file.name + '):', err);
+    }
+  }
+
+  progressFill.style.width = '100%';
+  progressText.textContent = 'Tamamlandı: ' + success + ' başarılı' + (failed > 0 ? ', ' + failed + ' başarısız' : '');
+
+  btn.disabled = false;
+  document.getElementById('btn-drive-back').disabled = false;
+
+  if (success > 0) {
+    toast(success + ' görsel Drive\'dan aktarıldı.' + (failed > 0 ? ' ' + failed + ' başarısız.' : ''));
+    setTimeout(function() {
+      document.getElementById('modal-drive').classList.add('hidden');
+      showEditor(currentExhibition.id);
+    }, 2000);
+  } else {
+    toast('Hiç görsel aktarılamadı.', 'error');
+  }
+});
+
 /* ─── GÖMME KODU ────────────────────────────────────────── */
 
 document.getElementById('btn-embed').addEventListener('click', async () => {

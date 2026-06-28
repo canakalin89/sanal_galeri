@@ -44,6 +44,7 @@ Asagidaki ortam degiskenlerini Vercel projesinde tanimlayın:
 | `GITHUB_OWNER` | GitHub kullanici adi |
 | `GITHUB_REPO` | Repository adi |
 | `GITHUB_BRANCH` | Branch adi (varsayilan: `main`) |
+| `GOOGLE_API_KEY` | Google Drive API anahtari (Drive'dan ice aktarma icin) |
 
 ## Yapi
 
@@ -60,7 +61,8 @@ sanal_galeri/
 ├── admin-app.js        # Yonetim paneli mantigi
 ├── vercel.json         # Vercel yapilandirmasi
 ├── api/
-│   └── auth.js         # Kimlik dogrulama serverless function
+│   ├── auth.js         # Kimlik dogrulama serverless function
+│   └── drive.js        # Google Drive API proxy
 └── images/
     └── <sergi-adi>/
         ├── meta.json   # Sergi bilgileri
@@ -73,7 +75,7 @@ sanal_galeri/
 1. `/admin` adresine gidin
 2. Sifre ile giris yapin
 3. "Yeni Sergi" butonuna tiklayin
-4. Sergi adini girin ve resimleri yukleyin
+4. Sergi adini girin ve resimleri yukleyin (dosyadan veya Drive'dan)
 
 ### Manuel Olarak
 1. `images/` altinda yeni bir klasor olusturun
@@ -91,6 +93,12 @@ sanal_galeri/
 }
 ```
 4. `npm run build` calistirin
+
+### Google Drive'dan Ice Aktarma
+1. Drive'da bir klasor olusturun ve gorselleri yukleyin
+2. Klasoru "Baglantisi olan herkes goruntuleyebilir" olarak paylasin
+3. Admin panelinde sergi editorundeki "Drive'dan Ice Aktar" butonuna tiklayin
+4. Drive klasor linkini yapistirin ve gorselleri secin
 
 ## Lisans
 

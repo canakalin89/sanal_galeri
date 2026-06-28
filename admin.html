@@ -104,7 +104,12 @@
             <input type="file" id="file-upload" multiple accept="image/jpeg,image/png,image/webp" hidden />
           </label>
         </div>
-        <p class="upload-hint">Maksimum dosya boyutu: 3 MB. Desteklenen formatlar: JPEG, PNG, WebP.</p>
+        <div class="upload-actions">
+          <p class="upload-hint">Maksimum dosya boyutu: 3 MB. Desteklenen formatlar: JPEG, PNG, WebP.</p>
+          <button id="btn-drive-import" class="btn-ghost btn-sm btn-drive">
+            <span class="drive-icon">&#9729;</span> Drive'dan İçe Aktar
+          </button>
+        </div>
 
         <div id="editor-loading" class="loading-state hidden">
           <div class="spinner"></div>
@@ -145,6 +150,57 @@
         <button id="btn-settings-save" class="btn-primary">Kaydet</button>
       </div>
       <p id="settings-error" class="error-msg hidden"></p>
+    </div>
+  </div>
+
+  <!-- DRIVE İÇE AKTARMA MODALİ -->
+  <div id="modal-drive" class="modal-overlay hidden">
+    <div class="modal-card modal-card-wide">
+      <h2><span class="drive-icon">&#9729;</span> Google Drive'dan İçe Aktar</h2>
+
+      <!-- Adım 1: Klasör linki -->
+      <div id="drive-step-link">
+        <p class="drive-info">
+          Drive'daki klasörü <strong>"Bağlantısı olan herkes görüntüleyebilir"</strong> olarak paylaşın,
+          sonra klasör linkini buraya yapıştırın.
+        </p>
+        <div class="field-group">
+          <label for="drive-folder-url">Drive Klasör Linki veya ID</label>
+          <input type="text" id="drive-folder-url" placeholder="https://drive.google.com/drive/folders/..." />
+        </div>
+        <div class="modal-actions">
+          <button id="btn-drive-cancel" class="btn-ghost">İptal</button>
+          <button id="btn-drive-scan" class="btn-primary">Klasörü Tara</button>
+        </div>
+        <p id="drive-link-error" class="error-msg hidden"></p>
+      </div>
+
+      <!-- Adım 2: Önizleme ve seçim -->
+      <div id="drive-step-preview" class="hidden">
+        <div id="drive-loading" class="loading-state">
+          <div class="spinner"></div>
+          <p>Drive klasörü taranıyor…</p>
+        </div>
+        <div id="drive-results" class="hidden">
+          <div class="drive-results-header">
+            <span id="drive-found-count"></span>
+            <label class="drive-select-all">
+              <input type="checkbox" id="drive-select-all" checked /> Tümünü seç
+            </label>
+          </div>
+          <div id="drive-thumbs" class="drive-thumbs-grid"></div>
+          <div id="drive-progress" class="hidden">
+            <div class="progress-bar">
+              <div class="progress-fill" id="drive-progress-fill"></div>
+            </div>
+            <p class="progress-text" id="drive-progress-text">Hazırlanıyor…</p>
+          </div>
+          <div class="modal-actions">
+            <button id="btn-drive-back" class="btn-ghost">Geri</button>
+            <button id="btn-drive-import-go" class="btn-primary">Seçilenleri İçe Aktar</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
