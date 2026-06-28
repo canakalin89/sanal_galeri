@@ -18,7 +18,7 @@ function ghHeaders() {
 
 async function ghGet(path) {
   const r = await fetch(
-    `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${path}`,
+    `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${path}?ref=${encodeURIComponent(GH.branch)}`,
     { headers: ghHeaders() }
   );
   if (!r.ok) throw new Error(`GitHub API hatası: ${r.status}`);
@@ -30,7 +30,7 @@ async function ghPut(path, textContent, message) {
   let sha = null;
   try {
     const existing = await fetch(
-      `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${path}`,
+      `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${path}?ref=${encodeURIComponent(GH.branch)}`,
       { headers: ghHeaders() }
     );
     if (existing.ok) {
@@ -61,7 +61,7 @@ async function ghPutBinary(path, arrayBuffer, message) {
   let sha = null;
   try {
     const existing = await fetch(
-      `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${path}`,
+      `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${path}?ref=${encodeURIComponent(GH.branch)}`,
       { headers: ghHeaders() }
     );
     if (existing.ok) sha = (await existing.json()).sha;
@@ -178,7 +178,7 @@ async function showDashboard() {
       let meta = {};
       try {
         const metaFile = await fetch(
-          `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/images/${dir.name}/meta.json`,
+          `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/images/${dir.name}/meta.json?ref=${encodeURIComponent(GH.branch)}`,
           { headers: ghHeaders() }
         );
         if (metaFile.ok) {
@@ -251,7 +251,7 @@ async function showEditor(exhibitionId) {
     // Meta ve resimleri paralel yükle
     const [metaResult, imagesResult] = await Promise.all([
       fetch(
-        `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/images/${exhibitionId}/meta.json`,
+        `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/images/${exhibitionId}/meta.json?ref=${encodeURIComponent(GH.branch)}`,
         { headers: ghHeaders() }
       ).then(async r => {
         if (r.status === 404) return {};
@@ -546,7 +546,7 @@ document.getElementById('btn-settings').addEventListener('click', async () => {
 
   try {
     const file = await fetch(
-      `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/config.json`,
+      `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/config.json?ref=${encodeURIComponent(GH.branch)}`,
       { headers: ghHeaders() }
     );
     if (file.ok) {
@@ -779,7 +779,7 @@ document.getElementById('btn-drive-import-go').addEventListener('click', async f
       var sha = null;
       try {
         var existing = await fetch(
-          'https://api.github.com/repos/' + GH.owner + '/' + GH.repo + '/contents/images/' + currentExhibition.id + '/' + encodeURIComponent(fileName),
+          'https://api.github.com/repos/' + GH.owner + '/' + GH.repo + '/contents/images/' + currentExhibition.id + '/' + encodeURIComponent(fileName) + '?ref=' + encodeURIComponent(GH.branch),
           { headers: ghHeaders() }
         );
         if (existing.ok) sha = (await existing.json()).sha;
