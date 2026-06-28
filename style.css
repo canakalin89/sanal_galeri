@@ -817,3 +817,28 @@ header h1 {
     padding: 1rem 0.8rem;
   }
 }
+
+/* ── EMBED MODU ──────────────────────────── */
+.embed-mode header,
+.embed-mode .about-section,
+.embed-mode .site-footer,
+.embed-mode .radio-widget,
+.embed-mode #btn-back {
+  display: none !important;
+}
+
+.embed-mode #view-home {
+  min-height: auto;
+}
+
+.embed-mode .exhibitions {
+  padding-top: 1rem;
+}
+
+.embed-mode .gallery-header {
+  position: static;
+}
+
+.embed-mode #view-gallery {
+  min-height: auto;
+}

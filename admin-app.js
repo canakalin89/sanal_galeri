@@ -600,6 +600,65 @@ document.getElementById('btn-settings-save').addEventListener('click', async () 
   }
 });
 
+/* ─── GÖMME KODU ────────────────────────────────────────── */
+
+document.getElementById('btn-embed').addEventListener('click', async () => {
+  var select = document.getElementById('embed-target');
+
+  // Mevcut seçenekleri temizle (ilk option hariç)
+  while (select.options.length > 1) select.remove(1);
+
+  try {
+    var entries = await ghGet('images');
+    var dirs = Array.isArray(entries) ? entries.filter(function(e) { return e.type === 'dir'; }) : [];
+    for (var i = 0; i < dirs.length; i++) {
+      var opt = document.createElement('option');
+      opt.value = dirs[i].name;
+      opt.textContent = formatFolderName(dirs[i].name);
+      select.appendChild(opt);
+    }
+  } catch (e) {}
+
+  updateEmbedCode();
+  document.getElementById('modal-embed').classList.remove('hidden');
+});
+
+document.getElementById('embed-target').addEventListener('change', updateEmbedCode);
+document.getElementById('embed-width').addEventListener('input', updateEmbedCode);
+document.getElementById('embed-height').addEventListener('input', updateEmbedCode);
+
+function updateEmbedCode() {
+  var target = document.getElementById('embed-target').value;
+  var width = document.getElementById('embed-width').value || '100%';
+  var height = document.getElementById('embed-height').value || '600px';
+
+  var baseUrl = window.location.origin;
+  var src = baseUrl + '/?embed=1';
+  if (target) src += '#' + target;
+
+  var code = '<iframe src="' + src + '" width="' + width + '" height="' + height + '" frameborder="0" style="border:none;border-radius:4px;" allowfullscreen></iframe>';
+  document.getElementById('embed-code').value = code;
+}
+
+document.getElementById('btn-embed-copy').addEventListener('click', function() {
+  var textarea = document.getElementById('embed-code');
+  textarea.select();
+  navigator.clipboard.writeText(textarea.value).then(function() {
+    toast('Gömme kodu kopyalandı.');
+  }).catch(function() {
+    document.execCommand('copy');
+    toast('Gömme kodu kopyalandı.');
+  });
+});
+
+document.getElementById('btn-embed-close').addEventListener('click', function() {
+  document.getElementById('modal-embed').classList.add('hidden');
+});
+
+document.getElementById('modal-embed').addEventListener('click', function(e) {
+  if (e.target === e.currentTarget) e.currentTarget.classList.add('hidden');
+});
+
 /* ─── YARDIMCI ───────────────────────────────────────────── */
 
 function formatFolderName(folder) {

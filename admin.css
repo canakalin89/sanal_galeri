@@ -491,6 +491,34 @@ textarea { resize: vertical; min-height: 80px; }
 .toast-error   { border-color: var(--danger);  color: #e74c3c; }
 
 
+/* ── EMBED MODAL ─────────────────────────── */
+.embed-hint {
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.embed-select {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.9rem;
+  padding: 0.6rem 0.8rem;
+}
+
+.embed-code-area {
+  font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  background: #111;
+  border-color: #333;
+  color: #aed581;
+  resize: vertical;
+}
+
 /* ── RESPONSIVE ──────────────────────────── */
 @media (max-width: 600px) {
   .admin-header { padding: 0.8rem 1rem; }

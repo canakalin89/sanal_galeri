@@ -201,9 +201,13 @@ lb.addEventListener('touchend', e => {
   if (Math.abs(dx) > 50) { dx < 0 ? next() : prev(); }
 }, { passive: true });
 
-/* ─── İFRAME: geri butonu gizle ─────────────────────────── */
-if (window.self !== window.top) {
-  document.getElementById('btn-back').style.display = 'none';
+/* ─── EMBED MODU ─────────────────────────────────────────── */
+
+var isEmbed = window.self !== window.top ||
+  new URLSearchParams(location.search).get('embed') === '1';
+
+if (isEmbed) {
+  document.body.classList.add('embed-mode');
 }
 
 /* ─── YARDIMCI ───────────────────────────────────────────── */
