@@ -75,9 +75,7 @@ if (fs.existsSync(imagesDir)) {
     });
 }
 
-fs.writeFileSync(
-  path.join(__dirname, 'images-list.js'),
-  `const SCHOOL_NAME = ${JSON.stringify(schoolName)};\nconst EXHIBITIONS = ${JSON.stringify(exhibitions, null, 2)};\n`
-);
+const output = `const SCHOOL_NAME = ${JSON.stringify(schoolName)};\nconst EXHIBITIONS = ${JSON.stringify(exhibitions, null, 2)};\n`;
+fs.writeFileSync(path.join(__dirname, 'images-list.js'), output);
 
 console.log(`${exhibitions.length} sergi listelendi.`);

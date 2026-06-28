@@ -1,5 +1,4 @@
 // EXHIBITIONS dizisi images-list.js tarafından sağlanır.
-// Yeni sergi: images/<klasor-adi>/ altına görselleri at, node build.js çalıştır.
 
 /* ─── ROUTING (hash tabanlı) ─────────────────────────────── */
 
@@ -28,7 +27,9 @@ function makeAlt(img, exhibitionName, index) {
 function showHome() {
   document.getElementById('view-home').classList.remove('hidden');
   document.getElementById('view-gallery').classList.add('hidden');
-  document.title = 'Sanal Galeri';
+  document.title = typeof SCHOOL_NAME !== 'undefined'
+    ? 'Sanal Sergi — ' + SCHOOL_NAME
+    : 'Sanal Sergi';
 
   const container = document.getElementById('exhibitions');
   container.innerHTML = '';
@@ -38,17 +39,30 @@ function showHome() {
     return;
   }
 
-  EXHIBITIONS.forEach(ex => {
+  EXHIBITIONS.forEach((ex, idx) => {
     const card = document.createElement('a');
     card.className = 'exhibition-card';
     card.href = `#${ex.id}`;
+    card.style.animationDelay = `${idx * 0.1}s`;
+
+    const descHtml = ex.description
+      ? `<p class="card-desc">${escapeHtml(ex.description)}</p>`
+      : '';
+    const yearBadge = ex.year
+      ? `<span class="card-year-badge">${escapeHtml(ex.year)}</span>`
+      : '';
+
     card.innerHTML = `
       <div class="card-thumb">
-        <img src="${ex.images[0].src}" alt="" loading="lazy" />
+        <img src="${ex.images[0].src}" alt="${escapeHtml(ex.name)}" loading="lazy" />
+        ${yearBadge}
       </div>
       <div class="card-info">
-        <span class="card-name">${ex.name}</span>
-        <span class="card-count">${ex.images.length} eser</span>
+        <span class="card-name">${escapeHtml(ex.name)}</span>
+        ${descHtml}
+        <div class="card-meta">
+          <span class="card-count">${ex.images.length} eser</span>
+        </div>
       </div>
     `;
     container.appendChild(card);
@@ -61,7 +75,7 @@ function showGallery(exhibition) {
   document.getElementById('view-home').classList.add('hidden');
   document.getElementById('view-gallery').classList.remove('hidden');
   document.getElementById('gallery-title').textContent = exhibition.name;
-  document.title = `${exhibition.name} — Sanal Galeri`;
+  document.title = `${exhibition.name} — Sanal Sergi`;
 
   const descEl = document.getElementById('gallery-desc');
   if (exhibition.description) {
@@ -69,6 +83,11 @@ function showGallery(exhibition) {
     descEl.classList.remove('hidden');
   } else {
     descEl.classList.add('hidden');
+  }
+
+  var countEl = document.getElementById('gallery-count');
+  if (countEl) {
+    countEl.textContent = exhibition.images.length + ' eser';
   }
 
   const grid = document.getElementById('gallery');
@@ -79,9 +98,23 @@ function showGallery(exhibition) {
     el.className = 'gallery-item';
     el.setAttribute('tabindex', '0');
     el.setAttribute('role', 'button');
+    el.style.animationDelay = `${Math.min(i * 0.03, 0.6)}s`;
     const altText = makeAlt(img, exhibition.name, i);
     el.setAttribute('aria-label', altText);
-    el.innerHTML = `<img src="${img.src}" alt="${altText}" loading="lazy" />`;
+
+    let overlayHtml = '';
+    if (img.artist) {
+      overlayHtml = `
+        <div class="gallery-item-overlay">
+          <span class="gallery-item-artist">${escapeHtml(img.artist)}</span>
+        </div>
+      `;
+    }
+
+    el.innerHTML = `
+      <img src="${img.src}" alt="${altText}" loading="lazy" />
+      ${overlayHtml}
+    `;
     el.addEventListener('click', () => {
       lastFocusedItem = el;
       openLightbox(exhibition.images, i);
@@ -95,6 +128,8 @@ function showGallery(exhibition) {
     });
     grid.appendChild(el);
   });
+
+  window.scrollTo({ top: 0, behavior: 'instant' });
 }
 
 document.getElementById('btn-back').addEventListener('click', () => {
@@ -112,8 +147,9 @@ function updateLightboxImage() {
   const lbImg = document.getElementById('lb-img');
   lbImg.src = img.src;
   lbImg.alt = img.artist || '';
-  const captionEl = document.getElementById('lb-caption');
-  captionEl.textContent = img.artist || '';
+  document.getElementById('lb-caption').textContent = img.artist || '';
+  document.getElementById('lb-counter').textContent =
+    (currentIndex + 1) + ' / ' + currentImages.length;
 }
 
 function openLightbox(images, index) {
@@ -168,6 +204,14 @@ lb.addEventListener('touchend', e => {
 /* ─── İFRAME: geri butonu gizle ─────────────────────────── */
 if (window.self !== window.top) {
   document.getElementById('btn-back').style.display = 'none';
+}
+
+/* ─── YARDIMCI ───────────────────────────────────────────── */
+
+function escapeHtml(str) {
+  var div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
 }
 
 /* ─── BAŞLAT ─────────────────────────────────────────────── */
