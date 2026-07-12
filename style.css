@@ -81,86 +81,121 @@ body {
   animation: shimmer 1.6s linear infinite;
 }
 
-/* ── HEADER ─────────────────────────────── */
-header {
-  background:
-    radial-gradient(ellipse at 30% -10%, rgba(16,179,255,.22) 0%, transparent 55%),
-    linear-gradient(160deg, var(--navy-950) 0%, var(--navy-800) 60%, var(--navy-700) 100%);
-  text-align: center;
-  padding: 4.5rem 2rem 3.5rem;
-  position: relative;
-  overflow: hidden;
+/* ── SABİT ÜST BAR ───────────────────────── */
+.site-header {
+  background: var(--navy-900);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  border-bottom: 3px solid var(--cyan-500);
+  box-shadow: 0 3px 16px rgba(0,0,0,.2);
 }
 
-header::after {
-  content: '';
-  position: absolute;
-  bottom: 0; left: 0; right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, transparent, var(--cyan-500), var(--red-500), transparent);
-  opacity: .8;
-}
-
-.header-content {
-  position: relative;
-  z-index: 1;
-}
-
-.school-link {
-  display: inline-flex;
-  flex-direction: column;
+.header-inner {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+  height: 64px;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
   text-decoration: none;
-  gap: 0.7rem;
-  margin-bottom: 1.4rem;
-  transition: opacity 0.2s;
+  min-width: 0;
 }
 
-.school-link:hover { opacity: 0.85; }
-
-.school-logo {
-  width: 68px;
-  height: 68px;
+.brand-logo {
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  box-shadow: 0 0 0 3px rgba(16,179,255,.25), 0 8px 24px rgba(0,0,0,.35);
-  animation: fadeInUp 0.7s ease both;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px rgba(16,179,255,.3);
 }
 
-.school-name {
-  font-family: var(--font-body);
-  font-size: 0.72rem;
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.brand-name {
+  font-family: var(--font-display);
+  font-size: 0.86rem;
   font-weight: 600;
-  letter-spacing: 0.28em;
+  color: #f0f4fa;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brand-sub {
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--cyan-300);
 }
 
-header h1 {
-  font-family: var(--font-display);
-  font-size: clamp(2.1rem, 5vw, 3.4rem);
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  color: #fff;
-  margin-bottom: 0.7rem;
-  animation: fadeInUp 0.8s ease 0.1s both;
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-shrink: 0;
 }
 
-.header-tagline {
-  font-family: var(--font-body);
+.stats-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: rgba(255,255,255,.4);
+  white-space: nowrap;
+}
+
+.stats-bar strong { color: rgba(255,255,255,.8); }
+.stats-bar .sep { opacity: .35; }
+
+.admin-link {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: rgba(255,255,255,.45);
+  text-decoration: none;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 6px;
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+  white-space: nowrap;
+}
+
+.admin-link:hover {
+  color: var(--cyan-300);
+  border-color: var(--cyan-500);
+  background: rgba(16,179,255,.08);
+}
+
+.page-tagline {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 1.8rem 2rem 0;
   font-size: 0.92rem;
-  font-weight: 400;
-  color: rgba(255,255,255,0.55);
-  letter-spacing: 0.02em;
-  animation: fadeInUp 0.8s ease 0.2s both;
+  color: var(--muted);
+  text-align: center;
 }
 
 /* ── SERGİ GRID ──────────────────────────── */
 #view-home { min-height: 100vh; }
 
 .exhibitions {
-  max-width: 1140px;
+  max-width: 1180px;
   margin: 0 auto;
-  padding: 3rem 2rem 2rem;
+  padding: 1.5rem 2rem 2rem;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 1.6rem;
@@ -583,88 +618,41 @@ header h1 {
 .site-footer {
   background: var(--navy-950);
   border-top: 1px solid rgba(127,227,255,0.12);
-  padding: 2rem 2rem;
+  text-align: center;
+  padding: 1.75rem 2rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
 }
 
-.footer-content {
-  max-width: 1140px;
-  margin: 0 auto;
+.footer-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  justify-content: center;
   flex-wrap: wrap;
+  gap: 0.45rem;
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.4);
 }
 
-.footer-school { display: flex; align-items: center; gap: 0.8rem; }
-
-.footer-school-link {
-  font-family: var(--font-display);
-  font-size: 0.88rem;
-  font-weight: 600;
+.footer-row a {
   color: rgba(255,255,255,0.55);
   text-decoration: none;
   transition: color 0.2s;
 }
 
-.footer-school-link:hover { color: var(--cyan-300); }
+.footer-row a:hover { color: var(--cyan-300); }
 
-.footer-year { font-size: 0.72rem; color: rgba(255,255,255,0.25); }
+.footer-sep { opacity: 0.35; }
 
-.footer-right {
-  display: flex;
-  align-items: center;
-  gap: 1.4rem;
-}
-
-.footer-admin-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.72rem;
-  font-weight: 500;
-  letter-spacing: 0.03em;
-  color: rgba(255,255,255,0.35);
-  text-decoration: none;
-  border: 1px solid rgba(255,255,255,0.12);
-  padding: 0.4rem 0.8rem;
-  border-radius: 100px;
-  transition: color 0.2s, border-color 0.2s, background 0.2s;
-}
-
-.footer-admin-link:hover {
-  color: var(--cyan-300);
-  border-color: var(--cyan-500);
-  background: rgba(16,179,255,0.08);
-}
-
-.footer-credit { text-align: right; }
-
-.footer-link {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.2rem;
-  text-decoration: none;
-  color: var(--muted);
-  transition: color 0.2s;
-}
-
-.footer-link:hover { color: var(--cyan-300); }
-
-.footer-label {
-  font-size: 0.6rem;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: inherit;
-  opacity: 0.5;
-}
-
-.footer-name {
-  font-family: var(--font-display);
-  font-size: 0.86rem;
-  font-weight: 600;
-  color: inherit;
+.footer-credit {
+  font-size: 0.7rem;
+  color: rgba(255,255,255,0.25);
+  padding-top: 0.4rem;
+  border-top: 1px dashed rgba(255,255,255,0.1);
+  width: 100%;
+  max-width: 640px;
 }
 
 /* ── RADYO WİDGET ────────────────────────── */
@@ -720,8 +708,13 @@ header h1 {
 
 /* ── RESPONSIVE ──────────────────────────── */
 @media (max-width: 600px) {
-  header { padding: 3rem 1.5rem 2.5rem; }
-  .school-logo { width: 56px; height: 56px; }
+  .header-inner { padding: 0 0.9rem; height: 56px; gap: 0.6rem; }
+  .brand-logo { width: 34px; height: 34px; }
+  .brand-name { font-size: 0.78rem; }
+  .stats-bar { display: none; }
+  .admin-link { font-size: 0.7rem; padding: 0.3rem 0.6rem; }
+
+  .page-tagline { padding: 1.2rem 1.25rem 0; font-size: 0.85rem; }
 
   .exhibitions {
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -739,11 +732,7 @@ header h1 {
 
   .about-section { padding: 3rem 1.5rem; }
 
-  .footer-content { flex-direction: column; text-align: center; gap: 1rem; }
-  .footer-school { flex-direction: column; gap: 0.3rem; }
-  .footer-right { flex-direction: column; gap: 0.8rem; }
-  .footer-credit { text-align: center; }
-  .footer-link { align-items: center; }
+  .footer-row { font-size: 0.72rem; }
 }
 
 @media (max-width: 480px) {

@@ -86,7 +86,11 @@ function makeLabel(img, exhibitionName, index) {
 async function showHome() {
   document.getElementById('view-home').classList.remove('hidden');
   document.getElementById('view-gallery').classList.add('hidden');
+  document.getElementById('site-header').classList.remove('hidden');
   document.title = typeof SCHOOL_NAME !== 'undefined' ? 'Sanal Sergi — ' + SCHOOL_NAME : 'Sanal Sergi';
+
+  const statCount = document.getElementById('stat-count');
+  if (statCount) statCount.textContent = ALL_EXHIBITIONS.length;
 
   const container = document.getElementById('exhibitions');
   container.innerHTML = '';
@@ -142,6 +146,7 @@ async function showHome() {
 async function showGallery(exhibition) {
   document.getElementById('view-home').classList.add('hidden');
   document.getElementById('view-gallery').classList.remove('hidden');
+  document.getElementById('site-header').classList.add('hidden');
   document.getElementById('gallery-title').textContent = exhibition.name;
   document.title = exhibition.name + ' — Sanal Sergi';
 

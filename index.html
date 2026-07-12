@@ -25,18 +25,30 @@
 </head>
 <body>
 
+  <!-- SABİT ÜST BAR -->
+  <header class="site-header" id="site-header">
+    <div class="header-inner">
+      <a class="brand" href="/">
+        <img src="/assets/logo.png" alt="Aziz Sancar Anadolu Lisesi" class="brand-logo" width="42" height="42" />
+        <div class="brand-text">
+          <span class="brand-name school-name">Aziz Sancar Anadolu Lisesi</span>
+          <span class="brand-sub">Sanal Sergi</span>
+        </div>
+      </a>
+      <div class="header-right">
+        <div class="stats-bar" id="stats-bar">
+          <span><strong id="stat-count">—</strong> sergi</span>
+          <span class="sep">·</span>
+          <span>arşivde</span>
+        </div>
+        <a class="admin-link" href="/admin" title="Yönetim Paneli">Yönetim</a>
+      </div>
+    </div>
+  </header>
+
   <!-- ANA SAYFA -->
   <div id="view-home">
-    <header>
-      <div class="header-content">
-        <a href="https://azizsancaranadolu.meb.k12.tr" target="_blank" rel="noopener noreferrer" class="school-link" title="Okul web sitesini ziyaret et">
-          <img src="/assets/logo.png" alt="Aziz Sancar Anadolu Lisesi Logosu" class="school-logo" width="68" height="68" />
-          <p class="school-name">Aziz Sancar Anadolu Lisesi</p>
-        </a>
-        <h1>Sanal Sergi</h1>
-        <p class="header-tagline">Öğrencilerimizin sanat eserlerini keşfedin</p>
-      </div>
-    </header>
+    <p class="page-tagline">Öğrencilerimizin sanat eserlerini keşfedin</p>
 
     <div class="exhibitions" id="exhibitions">
       <p class="empty"><span class="empty-icon">&#8987;</span>Sergiler yükleniyor…</p>
@@ -109,24 +121,19 @@
   </div>
 
   <footer class="site-footer">
-    <div class="footer-content">
-      <div class="footer-school">
-        <a href="https://azizsancaranadolu.meb.k12.tr" target="_blank" rel="noopener noreferrer" class="footer-school-link">
-          Aziz Sancar Anadolu Lisesi
-        </a>
-        <span class="footer-year">© 2025</span>
-      </div>
-      <div class="footer-right">
-        <a href="/admin" class="footer-admin-link" title="Sergi yönetim paneline giriş yapın">
-          &#128274; Yönetim Girişi
-        </a>
-        <div class="footer-credit">
-          <a href="https://www.instagram.com/can_akalin" target="_blank" rel="noopener noreferrer" class="footer-link">
-            <span class="footer-label">Tasarım &amp; Geliştirme</span>
-            <span class="footer-name">Can Akalın</span>
-          </a>
-        </div>
-      </div>
+    <div class="footer-row">
+      <span>© <span id="footer-year"></span> Aziz Sancar Anadolu Lisesi</span>
+      <span class="footer-sep">·</span>
+      <a href="https://azizsancaranadolu.meb.k12.tr" target="_blank" rel="noopener noreferrer">Okul Web Sitesi &#8594;</a>
+      <span class="footer-sep">·</span>
+      <a href="/admin">Yönetim</a>
+    </div>
+    <div class="footer-row footer-credit">
+      <span>Bu dijital arşiv Aziz Sancar Anadolu Lisesi için özel olarak geliştirilmiştir</span>
+      <span class="footer-sep">·</span>
+      <span>Geliştirici: Can Akalın</span>
+      <span class="footer-sep">·</span>
+      <a href="https://www.instagram.com/can_akalin" target="_blank" rel="noopener noreferrer">@can_akalin</a>
     </div>
   </footer>
 
@@ -136,6 +143,7 @@
       document.querySelector('.school-name').textContent = SCHOOL_NAME;
       document.title = 'Sanal Sergi — ' + SCHOOL_NAME;
     }
+    document.getElementById('footer-year').textContent = new Date().getFullYear();
   </script>
   <script src="script.js"></script>
   <script>
