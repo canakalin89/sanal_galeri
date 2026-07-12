@@ -22,18 +22,29 @@ module.exports = async (req, res) => {
       if (!folderId) return res.status(400).json({ error: 'folderId gerekli.' });
 
       const query = `'${folderId}' in parents and mimeType contains 'image/' and trashed = false`;
-      const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,mimeType,size,thumbnailLink)&pageSize=100&key=${apiKey}`;
+      let allFiles = [];
+      let pageToken = '';
 
-      const r = await fetch(url);
-      if (!r.ok) {
-        const err = await r.json().catch(() => ({}));
-        return res.status(r.status).json({
-          error: err.error?.message || 'Drive API hatası: ' + r.status
-        });
-      }
+      do {
+        const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}` +
+          `&fields=nextPageToken,files(id,name,mimeType,size,thumbnailLink,createdTime)` +
+          `&orderBy=createdTime&pageSize=1000&key=${apiKey}` +
+          (pageToken ? `&pageToken=${pageToken}` : '');
 
-      const data = await r.json();
-      return res.json({ files: data.files || [] });
+        const r = await fetch(url);
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          return res.status(r.status).json({
+            error: err.error?.message || 'Drive API hatası: ' + r.status
+          });
+        }
+
+        const data = await r.json();
+        allFiles = allFiles.concat(data.files || []);
+        pageToken = data.nextPageToken || '';
+      } while (pageToken);
+
+      return res.json({ files: allFiles });
     }
 
     if (action === 'download') {

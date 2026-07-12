@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="robots" content="noindex, nofollow" />
   <title>Yönetim Paneli — Sanal Galeri</title>
+  <link rel="icon" type="image/png" href="/assets/favicon-32.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="admin.css" />
 </head>
 <body>
@@ -12,9 +16,10 @@
   <!-- GİRİŞ SAYFASI -->
   <div id="page-login" class="page">
     <div class="login-card">
+      <img src="/assets/logo.png" alt="" class="login-logo" width="56" height="56" />
       <p class="login-school">Aziz Sancar Anadolu Lisesi</p>
       <h1>Yönetim Paneli</h1>
-      <p class="login-sub">Sanal Galeri</p>
+      <p class="login-sub">Sanal Sergi</p>
       <form id="form-login">
         <input
           type="password"
@@ -26,6 +31,10 @@
         <button type="submit" id="btn-login">Giriş Yap</button>
         <p id="login-error" class="error-msg hidden"></p>
       </form>
+      <p class="login-hint">
+        Bu sayfaya her zaman <strong>/admin</strong> adresinden ulaşabilirsiniz.
+        Şifre, Vercel proje ayarlarındaki <code>ADMIN_PASSWORD</code> ortam değişkenidir.
+      </p>
     </div>
   </div>
 
@@ -33,6 +42,7 @@
   <div id="page-dashboard" class="page hidden">
     <div class="admin-header">
       <div class="admin-header-left">
+        <img src="/assets/logo.png" alt="" class="admin-logo" />
         <h1>Sergiler</h1>
       </div>
       <div class="admin-header-right">
@@ -49,7 +59,9 @@
     </div>
 
     <div id="dashboard-empty" class="empty-state hidden">
+      <span class="empty-state-icon">&#9729;</span>
       <p>Henüz sergi yok.</p>
+      <p class="empty-state-sub">Bir Google Drive klasörü bağlayarak ilk serginizi oluşturun.</p>
       <button class="btn-primary" onclick="document.getElementById('btn-new-exhibition').click()">İlk sergiyi oluştur</button>
     </div>
 
@@ -69,7 +81,12 @@
       </div>
     </div>
 
-    <div class="editor-body">
+    <div id="editor-loading" class="loading-state">
+      <div class="spinner"></div>
+      <p>Sergi yükleniyor…</p>
+    </div>
+
+    <div id="editor-content" class="editor-body hidden">
       <!-- Sergi bilgileri -->
       <section class="editor-section">
         <h2>Sergi Bilgileri</h2>
@@ -95,27 +112,32 @@
         </div>
       </section>
 
+      <!-- Drive Klasörü -->
+      <section class="editor-section">
+        <h2>Google Drive Klasörü</h2>
+        <div class="drive-folder-row">
+          <span class="drive-icon">&#9729;</span>
+          <a id="drive-folder-link" href="#" target="_blank" rel="noopener noreferrer" class="drive-folder-link"></a>
+          <button id="btn-drive-refresh" class="btn-ghost btn-sm">Yenile</button>
+        </div>
+        <p class="drive-hint">
+          Bu klasöre eklediğiniz her yeni görsel, sayfa yenilendiğinde otomatik olarak sergide görünür.
+          Silinen görseller de otomatik kaldırılır.
+        </p>
+      </section>
+
       <!-- Eserler -->
       <section class="editor-section">
         <div class="section-header">
           <h2>Eserler <span id="image-count" class="count-badge"></span></h2>
-          <label class="btn-primary btn-upload-label">
-            Resim Yükle
-            <input type="file" id="file-upload" multiple accept="image/jpeg,image/png,image/webp" hidden />
-          </label>
         </div>
-        <div class="upload-actions">
-          <p class="upload-hint">Maksimum dosya boyutu: 3 MB. Desteklenen formatlar: JPEG, PNG, WebP.</p>
-          <button id="btn-drive-import" class="btn-ghost btn-sm btn-drive">
-            <span class="drive-icon">&#9729;</span> Drive'dan İçe Aktar
-          </button>
-        </div>
-
-        <div id="editor-loading" class="loading-state hidden">
+        <p class="upload-hint">
+          Her eser için başlık, kısa açıklama ve öğrenci/öğretmen adı ekleyebilirsiniz. Hepsi isteğe bağlıdır.
+        </p>
+        <div id="images-loading" class="loading-state hidden">
           <div class="spinner"></div>
-          <p>Resimler yükleniyor…</p>
+          <p>Görseller Drive'dan çekiliyor…</p>
         </div>
-
         <div id="images-grid" class="images-grid"></div>
       </section>
     </div>
@@ -123,11 +145,33 @@
 
   <!-- YENİ SERGİ MODALİ -->
   <div id="modal-new" class="modal-overlay hidden">
-    <div class="modal-card">
-      <h2>Yeni Sergi Oluştur</h2>
+    <div class="modal-card modal-card-wide">
+      <h2><span class="drive-icon">&#9729;</span> Yeni Sergi Oluştur</h2>
+      <p class="drive-info">
+        Önce Drive'da bir klasör oluşturup görselleri yükleyin, klasörü
+        <strong>"Bağlantısı olan herkes görüntüleyebilir"</strong> yapın, sonra linkini buraya yapıştırın.
+      </p>
       <div class="field-group">
         <label for="new-exhibition-name">Sergi Adı</label>
         <input type="text" id="new-exhibition-name" placeholder="Hat Sergisi" />
+      </div>
+      <div class="field-group">
+        <label for="new-exhibition-drive">Drive Klasör Linki veya ID</label>
+        <input type="text" id="new-exhibition-drive" placeholder="https://drive.google.com/drive/folders/..." />
+      </div>
+      <div class="field-group">
+        <label for="new-exhibition-description">Açıklama <span class="optional">(isteğe bağlı)</span></label>
+        <textarea id="new-exhibition-description" rows="2" placeholder="Sergi hakkında kısa bilgi"></textarea>
+      </div>
+      <div class="field-row two-col">
+        <div class="field-group">
+          <label for="new-exhibition-year">Öğretim Yılı <span class="optional">(isteğe bağlı)</span></label>
+          <input type="text" id="new-exhibition-year" placeholder="2025-2026" />
+        </div>
+        <div class="field-group">
+          <label for="new-exhibition-class">Sınıf <span class="optional">(isteğe bağlı)</span></label>
+          <input type="text" id="new-exhibition-class" placeholder="9-A" />
+        </div>
       </div>
       <div class="modal-actions">
         <button id="btn-modal-cancel" class="btn-ghost">İptal</button>
@@ -150,57 +194,6 @@
         <button id="btn-settings-save" class="btn-primary">Kaydet</button>
       </div>
       <p id="settings-error" class="error-msg hidden"></p>
-    </div>
-  </div>
-
-  <!-- DRIVE İÇE AKTARMA MODALİ -->
-  <div id="modal-drive" class="modal-overlay hidden">
-    <div class="modal-card modal-card-wide">
-      <h2><span class="drive-icon">&#9729;</span> Google Drive'dan İçe Aktar</h2>
-
-      <!-- Adım 1: Klasör linki -->
-      <div id="drive-step-link">
-        <p class="drive-info">
-          Drive'daki klasörü <strong>"Bağlantısı olan herkes görüntüleyebilir"</strong> olarak paylaşın,
-          sonra klasör linkini buraya yapıştırın.
-        </p>
-        <div class="field-group">
-          <label for="drive-folder-url">Drive Klasör Linki veya ID</label>
-          <input type="text" id="drive-folder-url" placeholder="https://drive.google.com/drive/folders/..." />
-        </div>
-        <div class="modal-actions">
-          <button id="btn-drive-cancel" class="btn-ghost">İptal</button>
-          <button id="btn-drive-scan" class="btn-primary">Klasörü Tara</button>
-        </div>
-        <p id="drive-link-error" class="error-msg hidden"></p>
-      </div>
-
-      <!-- Adım 2: Önizleme ve seçim -->
-      <div id="drive-step-preview" class="hidden">
-        <div id="drive-loading" class="loading-state">
-          <div class="spinner"></div>
-          <p>Drive klasörü taranıyor…</p>
-        </div>
-        <div id="drive-results" class="hidden">
-          <div class="drive-results-header">
-            <span id="drive-found-count"></span>
-            <label class="drive-select-all">
-              <input type="checkbox" id="drive-select-all" checked /> Tümünü seç
-            </label>
-          </div>
-          <div id="drive-thumbs" class="drive-thumbs-grid"></div>
-          <div id="drive-progress" class="hidden">
-            <div class="progress-bar">
-              <div class="progress-fill" id="drive-progress-fill"></div>
-            </div>
-            <p class="progress-text" id="drive-progress-text">Hazırlanıyor…</p>
-          </div>
-          <div class="modal-actions">
-            <button id="btn-drive-back" class="btn-ghost">Geri</button>
-            <button id="btn-drive-import-go" class="btn-primary">Seçilenleri İçe Aktar</button>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 

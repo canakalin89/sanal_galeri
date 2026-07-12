@@ -1,11 +1,64 @@
-// EXHIBITIONS dizisi images-list.js tarafından sağlanır.
+// Tüm sergiler Google Drive'dan canlı çekilir.
+// exhibitions.json → sergi metadata'sı (ad, açıklama, Drive klasör ID'si)
+
+/* ─── DRIVE YARDIMCILARI ─────────────────────────────────── */
+
+function driveImgUrl(fileId, width) {
+  return 'https://lh3.googleusercontent.com/d/' + fileId + '=w' + (width || 1600);
+}
+
+const driveFilesCache = {}; // folderId -> files[]
+
+async function fetchDriveFiles(folderId) {
+  if (driveFilesCache[folderId]) return driveFilesCache[folderId];
+  const r = await fetch('/api/drive?action=list&folderId=' + encodeURIComponent(folderId));
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || 'Drive klasörü okunamadı');
+  driveFilesCache[folderId] = data.files || [];
+  return driveFilesCache[folderId];
+}
+
+async function resolveDriveExhibitionImages(ex) {
+  const files = await fetchDriveFiles(ex.driveFolderId);
+  const metaImages = ex.images || {};
+  return files.map(f => {
+    const m = metaImages[f.id] || {};
+    return {
+      src: driveImgUrl(f.id, 1600),
+      thumbSrc: driveImgUrl(f.id, 480),
+      title: m.title || null,
+      caption: m.caption || null,
+      artist: m.artist || null
+    };
+  });
+}
+
+/* ─── SERGİ LİSTESİ ──────────────────────────────────────── */
+
+let ALL_EXHIBITIONS = [];
+let exhibitionsReady = false;
+
+async function loadExhibitionsMeta() {
+  try {
+    const r = await fetch('exhibitions.json', { cache: 'no-store' });
+    ALL_EXHIBITIONS = r.ok ? await r.json() : [];
+  } catch {
+    ALL_EXHIBITIONS = [];
+  }
+  exhibitionsReady = true;
+}
+
+function findExhibitionMeta(id) {
+  return ALL_EXHIBITIONS.find(e => e.id === id) || null;
+}
 
 /* ─── ROUTING (hash tabanlı) ─────────────────────────────── */
 
-function route() {
+async function route() {
+  if (!exhibitionsReady) await loadExhibitionsMeta();
   const id = location.hash.slice(1);
-  const exhibition = EXHIBITIONS.find(e => e.id === id);
-  if (id && exhibition) {
+  const exhibition = id ? findExhibitionMeta(id) : null;
+  if (exhibition) {
     showGallery(exhibition);
   } else {
     showHome();
@@ -14,68 +67,83 @@ function route() {
 
 window.addEventListener('hashchange', route);
 
-/* ─── YARDIMCI: alt text üret ────────────────────────────── */
+/* ─── YARDIMCI ───────────────────────────────────────────── */
 
-function makeAlt(img, exhibitionName, index) {
-  return img.artist
-    ? `${exhibitionName} — ${img.artist}`
-    : `${exhibitionName}, eser ${index + 1}`;
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str == null ? '' : str;
+  return div.innerHTML;
+}
+
+function makeLabel(img, exhibitionName, index) {
+  if (img.title) return img.title;
+  if (img.artist) return exhibitionName + ' — ' + img.artist;
+  return exhibitionName + ', eser ' + (index + 1);
 }
 
 /* ─── ANA SAYFA ──────────────────────────────────────────── */
 
-function showHome() {
+async function showHome() {
   document.getElementById('view-home').classList.remove('hidden');
   document.getElementById('view-gallery').classList.add('hidden');
-  document.title = typeof SCHOOL_NAME !== 'undefined'
-    ? 'Sanal Sergi — ' + SCHOOL_NAME
-    : 'Sanal Sergi';
+  document.title = typeof SCHOOL_NAME !== 'undefined' ? 'Sanal Sergi — ' + SCHOOL_NAME : 'Sanal Sergi';
 
   const container = document.getElementById('exhibitions');
   container.innerHTML = '';
 
-  if (EXHIBITIONS.length === 0) {
-    container.innerHTML = '<p class="empty">Henüz sergi eklenmedi.</p>';
+  if (ALL_EXHIBITIONS.length === 0) {
+    container.innerHTML = '<p class="empty"><span class="empty-icon">&#127912;</span>Henüz sergi eklenmedi.</p>';
     return;
   }
 
-  EXHIBITIONS.forEach((ex, idx) => {
+  ALL_EXHIBITIONS.forEach((ex, idx) => {
     const card = document.createElement('a');
     card.className = 'exhibition-card';
-    card.href = `#${ex.id}`;
-    card.style.animationDelay = `${idx * 0.1}s`;
+    card.href = '#' + ex.id;
+    card.style.animationDelay = Math.min(idx * 0.07, 0.5) + 's';
 
-    const descHtml = ex.description
-      ? `<p class="card-desc">${escapeHtml(ex.description)}</p>`
-      : '';
-    const yearBadge = ex.year
-      ? `<span class="card-year-badge">${escapeHtml(ex.year)}</span>`
-      : '';
+    const yearBadge = ex.year ? '<span class="card-year-badge">' + escapeHtml(ex.year) + '</span>' : '';
+    const descHtml = ex.description ? '<p class="card-desc">' + escapeHtml(ex.description) + '</p>' : '';
 
-    card.innerHTML = `
-      <div class="card-thumb">
-        <img src="${ex.images[0].src}" alt="${escapeHtml(ex.name)}" loading="lazy" />
-        ${yearBadge}
-      </div>
-      <div class="card-info">
-        <span class="card-name">${escapeHtml(ex.name)}</span>
-        ${descHtml}
-        <div class="card-meta">
-          <span class="card-count">${ex.images.length} eser</span>
-        </div>
-      </div>
-    `;
+    card.innerHTML =
+      '<div class="card-thumb skeleton"></div>' +
+      '<div class="card-info">' +
+        '<span class="card-name">' + escapeHtml(ex.name) + '</span>' +
+        descHtml +
+        '<div class="card-meta"><span class="card-count">Yükleniyor…</span></div>' +
+      '</div>';
+
     container.appendChild(card);
+
+    const thumbEl = card.querySelector('.card-thumb');
+    const countEl = card.querySelector('.card-count');
+
+    resolveDriveExhibitionImages(ex)
+      .then(images => {
+        thumbEl.classList.remove('skeleton');
+        if (images.length > 0) {
+          thumbEl.innerHTML =
+            '<img src="' + (images[0].thumbSrc || images[0].src) + '" alt="' + escapeHtml(ex.name) + '" loading="lazy" />' +
+            yearBadge;
+        } else {
+          thumbEl.innerHTML = yearBadge;
+        }
+        countEl.textContent = images.length + ' eser';
+      })
+      .catch(() => {
+        thumbEl.classList.remove('skeleton');
+        countEl.textContent = 'Yüklenemedi';
+      });
   });
 }
 
 /* ─── GALERİ SAYFASI ─────────────────────────────────────── */
 
-function showGallery(exhibition) {
+async function showGallery(exhibition) {
   document.getElementById('view-home').classList.add('hidden');
   document.getElementById('view-gallery').classList.remove('hidden');
   document.getElementById('gallery-title').textContent = exhibition.name;
-  document.title = `${exhibition.name} — Sanal Sergi`;
+  document.title = exhibition.name + ' — Sanal Sergi';
 
   const descEl = document.getElementById('gallery-desc');
   if (exhibition.description) {
@@ -85,51 +153,64 @@ function showGallery(exhibition) {
     descEl.classList.add('hidden');
   }
 
-  var countEl = document.getElementById('gallery-count');
-  if (countEl) {
-    countEl.textContent = exhibition.images.length + ' eser';
-  }
+  const countEl = document.getElementById('gallery-count');
+  countEl.textContent = '';
 
   const grid = document.getElementById('gallery');
+  window.scrollTo({ top: 0, behavior: 'instant' });
+
+  grid.innerHTML = '<div class="gallery-loading"><div class="spinner"></div><p>Sergi yükleniyor…</p></div>';
+  let images;
+  try {
+    images = await resolveDriveExhibitionImages(exhibition);
+  } catch (err) {
+    grid.innerHTML = '<div class="gallery-error"><strong>Sergi yüklenemedi</strong><p>' + escapeHtml(err.message) + '</p></div>';
+    return;
+  }
+
+  countEl.textContent = images.length + ' eser';
   grid.innerHTML = '';
 
-  exhibition.images.forEach((img, i) => {
+  if (images.length === 0) {
+    grid.innerHTML = '<div class="gallery-error"><strong>Bu sergide henüz eser yok.</strong></div>';
+    return;
+  }
+
+  images.forEach((img, i) => {
     const el = document.createElement('div');
     el.className = 'gallery-item';
     el.setAttribute('tabindex', '0');
     el.setAttribute('role', 'button');
-    el.style.animationDelay = `${Math.min(i * 0.03, 0.6)}s`;
-    const altText = makeAlt(img, exhibition.name, i);
-    el.setAttribute('aria-label', altText);
+    el.style.animationDelay = Math.min(i * 0.03, 0.6) + 's';
+    const label = makeLabel(img, exhibition.name, i);
+    el.setAttribute('aria-label', label);
 
     let overlayHtml = '';
-    if (img.artist) {
-      overlayHtml = `
-        <div class="gallery-item-overlay">
-          <span class="gallery-item-artist">${escapeHtml(img.artist)}</span>
-        </div>
-      `;
+    if (img.title || img.artist) {
+      overlayHtml =
+        '<div class="gallery-item-overlay">' +
+          (img.title ? '<span class="gallery-item-title">' + escapeHtml(img.title) + '</span>' : '') +
+          (img.artist ? '<span class="gallery-item-artist">' + escapeHtml(img.artist) + '</span>' : '') +
+        '</div>';
     }
 
-    el.innerHTML = `
-      <img src="${img.src}" alt="${altText}" loading="lazy" />
-      ${overlayHtml}
-    `;
+    el.innerHTML =
+      '<img src="' + (img.thumbSrc || img.src) + '" alt="' + escapeHtml(label) + '" loading="lazy" />' +
+      overlayHtml;
+
     el.addEventListener('click', () => {
       lastFocusedItem = el;
-      openLightbox(exhibition.images, i);
+      openLightbox(images, i, exhibition.name);
     });
     el.addEventListener('keydown', e => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         lastFocusedItem = el;
-        openLightbox(exhibition.images, i);
+        openLightbox(images, i, exhibition.name);
       }
     });
     grid.appendChild(el);
   });
-
-  window.scrollTo({ top: 0, behavior: 'instant' });
 }
 
 document.getElementById('btn-back').addEventListener('click', () => {
@@ -140,21 +221,24 @@ document.getElementById('btn-back').addEventListener('click', () => {
 
 let currentImages = [];
 let currentIndex  = 0;
+let currentExName = '';
 let lastFocusedItem = null;
 
 function updateLightboxImage() {
   const img = currentImages[currentIndex];
   const lbImg = document.getElementById('lb-img');
   lbImg.src = img.src;
-  lbImg.alt = img.artist || '';
-  document.getElementById('lb-caption').textContent = img.artist || '';
-  document.getElementById('lb-counter').textContent =
-    (currentIndex + 1) + ' / ' + currentImages.length;
+  lbImg.alt = makeLabel(img, currentExName, currentIndex);
+  document.getElementById('lb-title').textContent = img.title || '';
+  document.getElementById('lb-caption').textContent = img.caption || '';
+  document.getElementById('lb-artist').textContent = img.artist || '';
+  document.getElementById('lb-counter').textContent = (currentIndex + 1) + ' / ' + currentImages.length;
 }
 
-function openLightbox(images, index) {
+function openLightbox(images, index, exhibitionName) {
   currentImages = images;
   currentIndex  = index;
+  currentExName = exhibitionName || '';
   updateLightboxImage();
   document.getElementById('lightbox').classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -203,19 +287,12 @@ lb.addEventListener('touchend', e => {
 
 /* ─── EMBED MODU ─────────────────────────────────────────── */
 
-var isEmbed = window.self !== window.top ||
+const isEmbed = window.self !== window.top ||
   new URLSearchParams(location.search).get('embed') === '1';
 
 if (isEmbed) {
   document.body.classList.add('embed-mode');
-}
-
-/* ─── YARDIMCI ───────────────────────────────────────────── */
-
-function escapeHtml(str) {
-  var div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
+  document.getElementById('btn-back').style.display = 'none';
 }
 
 /* ─── BAŞLAT ─────────────────────────────────────────────── */

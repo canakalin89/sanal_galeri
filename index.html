@@ -5,18 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sanal Sergi — Aziz Sancar Anadolu Lisesi</title>
   <meta name="description" content="Aziz Sancar Anadolu Lisesi öğrencilerinin resim ve sanat eserlerinin sergilendiği sanal galeri." />
-  <meta name="theme-color" content="#13110d" />
+  <meta name="theme-color" content="#0d2b4a" />
 
   <!-- Open Graph -->
   <meta property="og:title" content="Sanal Sergi — Aziz Sancar Anadolu Lisesi" />
   <meta property="og:description" content="Öğrencilerimizin resim ve sanat eserlerinin sergilendiği sanal galeri." />
+  <meta property="og:image" content="/assets/logo.png" />
   <meta property="og:type" content="website" />
   <meta property="og:locale" content="tr_TR" />
 
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎨</text></svg>" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/assets/favicon-192.png" />
+  <link rel="apple-touch-icon" href="/assets/favicon-192.png" />
+
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -26,7 +30,7 @@
     <header>
       <div class="header-content">
         <a href="https://azizsancaranadolu.meb.k12.tr" target="_blank" rel="noopener noreferrer" class="school-link" title="Okul web sitesini ziyaret et">
-          <span class="school-crest" aria-hidden="true">🏫</span>
+          <img src="/assets/logo.png" alt="Aziz Sancar Anadolu Lisesi Logosu" class="school-logo" width="68" height="68" />
           <p class="school-name">Aziz Sancar Anadolu Lisesi</p>
         </a>
         <h1>Sanal Sergi</h1>
@@ -34,19 +38,22 @@
       </div>
     </header>
 
-    <div class="exhibitions" id="exhibitions"></div>
+    <div class="exhibitions" id="exhibitions">
+      <p class="empty"><span class="empty-icon">&#8987;</span>Sergiler yükleniyor…</p>
+    </div>
 
     <section class="about-section" id="about">
       <div class="about-content">
         <h2>Hakkında</h2>
         <p>
-          Bu sanal galeri, <strong>Aziz Sancar Anadolu Lisesi</strong> öğrencilerinin
+          Bu dijital arşiv, <strong>Aziz Sancar Anadolu Lisesi</strong> öğrencilerinin
           görsel sanatlar derslerinde ve atölye çalışmalarında ürettikleri eserleri
-          dijital ortamda sergilemek amacıyla hazırlanmıştır.
+          taranarak kalıcı biçimde saklanması ve sergilenmesi amacıyla hazırlanmıştır.
         </p>
         <p>
-          Öğrencilerimizin emek ve yaratıcılıklarını geniş bir kitleyle paylaşmayı,
-          sanat eğitimine olan ilgiyi artırmayı hedefliyoruz.
+          Emek verilerek üretilen eserlerin zamanla kaybolmaması, geniş bir kitleyle
+          paylaşılması ve telefon ile bilgisayardan rahatça görüntülenebilmesi
+          hedeflenmektedir.
         </p>
         <a href="https://azizsancaranadolu.meb.k12.tr" target="_blank" rel="noopener noreferrer" class="about-link">
           Okulumuzun Web Sitesi &#8599;
@@ -76,7 +83,9 @@
     <button class="lb-nav lb-next" id="lb-next" aria-label="Sonraki">&#8250;</button>
     <img class="lb-img" id="lb-img" src="" alt="" />
     <div class="lb-info">
+      <span class="lb-title" id="lb-title"></span>
       <span class="lb-caption" id="lb-caption"></span>
+      <span class="lb-artist" id="lb-artist"></span>
       <span class="lb-counter" id="lb-counter"></span>
     </div>
   </div>
@@ -107,11 +116,16 @@
         </a>
         <span class="footer-year">© 2025</span>
       </div>
-      <div class="footer-credit">
-        <a href="https://www.instagram.com/can_akalin" target="_blank" rel="noopener noreferrer" class="footer-link">
-          <span class="footer-label">Tasarım &amp; Geliştirme</span>
-          <span class="footer-name">Can Akalın</span>
+      <div class="footer-right">
+        <a href="/admin" class="footer-admin-link" title="Sergi yönetim paneline giriş yapın">
+          &#128274; Yönetim Girişi
         </a>
+        <div class="footer-credit">
+          <a href="https://www.instagram.com/can_akalin" target="_blank" rel="noopener noreferrer" class="footer-link">
+            <span class="footer-label">Tasarım &amp; Geliştirme</span>
+            <span class="footer-name">Can Akalın</span>
+          </a>
+        </div>
       </div>
     </div>
   </footer>
