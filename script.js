@@ -337,6 +337,14 @@ document.getElementById('gal3d-card-close').addEventListener('click', () => {
   window.gallery3DExitFocus?.();
 });
 
+document.getElementById('gal3d-card-prev').addEventListener('click', () => {
+  window.gallery3DPrev?.();
+});
+
+document.getElementById('gal3d-card-next').addEventListener('click', () => {
+  window.gallery3DNext?.();
+});
+
 /* ─── EMBED MODU ─────────────────────────────────────────── */
 
 const isEmbed = window.self !== window.top ||

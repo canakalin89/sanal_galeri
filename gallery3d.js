@@ -101,6 +101,29 @@
     return tex;
   }
 
+  function makeRugTexture() {
+    const size = 512;
+    const canvas = document.createElement('canvas');
+    canvas.width = size; canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#4a1f28';
+    ctx.fillRect(0, 0, size, size);
+    ctx.strokeStyle = '#c9a84c';
+    ctx.lineWidth = 10;
+    ctx.strokeRect(20, 20, size - 40, size - 40);
+    ctx.lineWidth = 3;
+    ctx.strokeRect(48, 48, size - 96, size - 96);
+    ctx.fillStyle = '#c9a84c';
+    [[48, 48], [size - 48, 48], [48, size - 48], [size - 48, size - 48]].forEach(([x, y]) => {
+      ctx.beginPath();
+      ctx.arc(x, y, 9, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+
   /* ─── SALON ÜRETİMİ ──────────────────────────────────────── */
 
   function buildRoom(count) {
@@ -111,12 +134,13 @@
 
     const group = new THREE.Group();
 
-    // Sıcak, davetkâr müze duvarı (bordo/şarap tonu) — soğuk/boş "backrooms" hissinden kaçınmak için
-    const wallMat = new THREE.MeshStandardMaterial({ color: 0x33232a, roughness: 0.85, metalness: 0.04 });
+    // Sıcak, aydınlık müze duvarı (krem/bej) — gerçek bir sanat galerisi izlenimi,
+    // "backrooms" hissi veren koyu/soğuk tonlardan kaçınıyoruz
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0xede6d8, roughness: 0.92, metalness: 0.0 });
     const floorTex = makeFloorTexture();
     floorTex.repeat.set(wallLen / 2, wallLen / 2);
     const floorMat = new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.85 });
-    const ceilMat = new THREE.MeshStandardMaterial({ color: 0x241a1f, roughness: 1 });
+    const ceilMat = new THREE.MeshStandardMaterial({ color: 0xdcd3c0, roughness: 1 });
 
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(wallLen, wallLen), floorMat);
     floor.rotation.x = -Math.PI / 2;
@@ -126,6 +150,24 @@
     ceiling.rotation.x = Math.PI / 2;
     ceiling.position.y = state.wallHeight;
     group.add(ceiling);
+
+    // Ahşap tavan kirişleri — düz tavanı kırıp gerçek bir galeri mimarisi hissi verir
+    const beamMat = new THREE.MeshStandardMaterial({ color: 0x4a3324, roughness: 0.8 });
+    const beamCount = Math.max(3, Math.round(wallLen / 2.4));
+    const beamSpacing = wallLen / (beamCount + 1);
+    for (let i = 1; i <= beamCount; i++) {
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(wallLen, 0.22, 0.28), beamMat);
+      beam.position.set(0, state.wallHeight - 0.11, -state.roomHalfDepth + beamSpacing * i);
+      group.add(beam);
+    }
+
+    // Aydınlatma rayı görünümü — her kiriş boyunca küçük sıcak nokta lambalar
+    const trackMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5, metalness: 0.6 });
+    for (let i = 1; i <= beamCount; i++) {
+      const fixture = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.08, 0.08), trackMat);
+      fixture.position.set(0, state.wallHeight - 0.32, -state.roomHalfDepth + beamSpacing * i);
+      group.add(fixture);
+    }
 
     const wallGeoNS = new THREE.PlaneGeometry(wallLen, state.wallHeight);
     const wallGeoEW = new THREE.PlaneGeometry(wallLen, state.wallHeight);
@@ -172,6 +214,99 @@
     baseW.rotation.y = Math.PI / 2;
     baseW.position.set(-state.roomHalfWidth + 0.03, baseHeight / 2, 0);
     group.add(baseW);
+
+    // Tavan pervazı — süpürgeliğin eşi, tepede. Kutu gibi düz bir oda hissini kırar.
+    const crownHeight = 0.1;
+    const crownY = state.wallHeight - crownHeight / 2 - 0.02;
+    const crownGeoNS = new THREE.BoxGeometry(wallLen - 0.1, crownHeight, 0.06);
+    const crownGeoEW = new THREE.BoxGeometry(wallLen - 0.1, crownHeight, 0.06);
+
+    const crownN = new THREE.Mesh(crownGeoNS, baseMat);
+    crownN.position.set(0, crownY, -state.roomHalfDepth + 0.03);
+    group.add(crownN);
+
+    const crownS = new THREE.Mesh(crownGeoNS, baseMat);
+    crownS.position.set(0, crownY, state.roomHalfDepth - 0.03);
+    group.add(crownS);
+
+    const crownE = new THREE.Mesh(crownGeoEW, baseMat);
+    crownE.rotation.y = Math.PI / 2;
+    crownE.position.set(state.roomHalfWidth - 0.03, crownY, 0);
+    group.add(crownE);
+
+    const crownW = new THREE.Mesh(crownGeoEW, baseMat);
+    crownW.rotation.y = Math.PI / 2;
+    crownW.position.set(-state.roomHalfWidth + 0.03, crownY, 0);
+    group.add(crownW);
+
+    // Köşe pilastırları — dört köşeye ince altın dikey şerit, düz kutu hissini kırar
+    const pilasterMat = new THREE.MeshStandardMaterial({ color: 0xc9a84c, roughness: 0.4, metalness: 0.55 });
+    const pilasterGeo = new THREE.BoxGeometry(0.1, state.wallHeight - 0.1, 0.1);
+    const cornerOffset = 0.35;
+    [
+      [state.roomHalfWidth - cornerOffset, -state.roomHalfDepth + cornerOffset],
+      [state.roomHalfWidth - cornerOffset, state.roomHalfDepth - cornerOffset],
+      [-state.roomHalfWidth + cornerOffset, -state.roomHalfDepth + cornerOffset],
+      [-state.roomHalfWidth + cornerOffset, state.roomHalfDepth - cornerOffset]
+    ].forEach(([x, z]) => {
+      const p = new THREE.Mesh(pilasterGeo, pilasterMat);
+      p.position.set(x, state.wallHeight / 2, z);
+      group.add(p);
+    });
+
+    // Zemin halısı — merkeze sıcaklık ve odak noktası katar, boş/kutu hissini azaltır
+    const rugTex = makeRugTexture();
+    const rugMat = new THREE.MeshStandardMaterial({ map: rugTex, roughness: 0.95 });
+    const rugSize = Math.max(4, Math.min(wallLen * 0.55, wallLen - 3));
+    const rug = new THREE.Mesh(new THREE.PlaneGeometry(rugSize, rugSize), rugMat);
+    rug.rotation.x = -Math.PI / 2;
+    rug.position.y = 0.008;
+    group.add(rug);
+
+    // Seyir bankı — halının üzerinde, gerçek bir galeri mobilyası
+    const benchWoodMat = new THREE.MeshStandardMaterial({ color: 0x2a1e14, roughness: 0.6 });
+    const benchPadMat = new THREE.MeshStandardMaterial({ color: 0x3a2a30, roughness: 0.85 });
+    const benchGroup = new THREE.Group();
+    const benchPad = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.12, 0.55), benchPadMat);
+    benchPad.position.y = 0.42;
+    benchGroup.add(benchPad);
+    [[-0.65, -0.2], [0.65, -0.2], [-0.65, 0.2], [0.65, 0.2]].forEach(([x, z]) => {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.4, 0.08), benchWoodMat);
+      leg.position.set(x, 0.2, z);
+      benchGroup.add(leg);
+    });
+    benchGroup.position.set(0, 0, -1.8); // kamera başlangıç noktasının önünde, kuzey duvarına bakar
+    group.add(benchGroup);
+
+    // Saksılar — köşelere sıcaklık katan basit prosedürel bitkiler
+    function makePlant() {
+      const plantGroup = new THREE.Group();
+      const potMat = new THREE.MeshStandardMaterial({ color: 0x5a4a3a, roughness: 0.8 });
+      const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.16, 0.32, 12), potMat);
+      pot.position.y = 0.16;
+      plantGroup.add(pot);
+      const leafMat = new THREE.MeshStandardMaterial({ color: 0x3d6b3f, roughness: 0.7 });
+      for (let i = 0; i < 6; i++) {
+        const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.65, 6), leafMat);
+        const angle = (i / 6) * Math.PI * 2;
+        leaf.position.set(Math.cos(angle) * 0.1, 0.55 + Math.random() * 0.15, Math.sin(angle) * 0.1);
+        leaf.rotation.z = Math.cos(angle) * 0.3;
+        leaf.rotation.x = Math.sin(angle) * 0.3;
+        plantGroup.add(leaf);
+      }
+      return plantGroup;
+    }
+    const plantMargin = 1.0;
+    [
+      [state.roomHalfWidth - plantMargin, state.roomHalfDepth - plantMargin],
+      [-state.roomHalfWidth + plantMargin, state.roomHalfDepth - plantMargin],
+      [state.roomHalfWidth - plantMargin, -state.roomHalfDepth + plantMargin],
+      [-state.roomHalfWidth + plantMargin, -state.roomHalfDepth + plantMargin]
+    ].forEach(([x, z]) => {
+      const plant = makePlant();
+      plant.position.set(x, 0, z);
+      group.add(plant);
+    });
 
     // Sıcak "spot" ışıkları — her duvara bir tane, tavana yakın. Düz/steril
     // görünümü kırıp gerçek bir galeri gibi sıcak ışık havuzları oluşturur.
@@ -295,7 +430,7 @@
   function setupScene(container) {
     scene = new THREE.Scene();
     // Daha uzak ve daha aydınlık sis — davetkâr bir salon hissi, ürkütücü karanlık boşluk değil
-    const fogColor = 0x241a1f;
+    const fogColor = 0xd8cfbc;
     scene.fog = new THREE.Fog(fogColor, 16, 34);
     scene.background = new THREE.Color(fogColor);
 
@@ -502,6 +637,14 @@
     }
   }
 
+  function focusAdjacentFrame(delta) {
+    if (!state.focusFrame || state.frames.length === 0) return;
+    const idx = state.frames.indexOf(state.focusFrame);
+    if (idx === -1) return;
+    const nextIdx = (idx + delta + state.frames.length) % state.frames.length;
+    focusOnFrame(state.frames[nextIdx]);
+  }
+
   /* ─── ESER BİLGİ KARTI ───────────────────────────────────── */
 
   function showArtworkCard(img) {
@@ -517,7 +660,57 @@
     el('gal3d-card')?.classList.add('hidden');
   }
 
+  /* ─── MİNİ HARİTA ────────────────────────────────────────── */
+
+  function drawMinimap() {
+    const canvas = el('gal3d-minimap');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const size = canvas.width;
+    ctx.clearRect(0, 0, size, size);
+
+    const roomW = state.roomHalfWidth * 2;
+    const roomD = state.roomHalfDepth * 2;
+    const scale = (size - 16) / Math.max(roomW, roomD);
+    const ox = size / 2, oz = size / 2;
+
+    ctx.fillStyle = 'rgba(237, 230, 216, 0.15)';
+    ctx.fillRect(ox - (roomW * scale) / 2, oz - (roomD * scale) / 2, roomW * scale, roomD * scale);
+    ctx.strokeStyle = 'rgba(201, 168, 76, 0.7)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(ox - (roomW * scale) / 2, oz - (roomD * scale) / 2, roomW * scale, roomD * scale);
+
+    // Eser noktaları
+    ctx.fillStyle = 'rgba(201, 168, 76, 0.9)';
+    state.frames.forEach(f => {
+      const px = ox + f.position.x * scale;
+      const pz = oz + f.position.z * scale;
+      ctx.beginPath();
+      ctx.arc(px, pz, 2, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // Oyuncu konumu + baktığı yön
+    const px = ox + camera.position.x * scale;
+    const pz = oz + camera.position.z * scale;
+    const dirX = -Math.sin(state.yaw), dirZ = -Math.cos(state.yaw);
+
+    ctx.save();
+    ctx.translate(px, pz);
+    ctx.rotate(Math.atan2(dirX, -dirZ));
+    ctx.fillStyle = '#10b3ff';
+    ctx.beginPath();
+    ctx.moveTo(0, -7);
+    ctx.lineTo(5, 6);
+    ctx.lineTo(-5, 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
   /* ─── ANİMASYON DÖNGÜSÜ ──────────────────────────────────── */
+
+  let minimapFrameCount = 0;
 
   function animate() {
     raf = requestAnimationFrame(animate);
@@ -525,6 +718,9 @@
     updateFocusAnimation(dt);
     updateMovement(dt);
     renderer.render(scene, camera);
+
+    minimapFrameCount++;
+    if (minimapFrameCount % 3 === 0) drawMinimap(); // performans için 3 karede bir
   }
 
   /* ─── AÇILIŞ / KAPANIŞ ───────────────────────────────────── */
@@ -563,12 +759,14 @@
     state.isMobile = isMobileDevice();
 
     el('gal3d-joystick').classList.toggle('hidden', !state.isMobile);
-    el('gal3d-hint').textContent = state.isMobile
-      ? 'Sol alttaki çubukla yürü, ekranı sürükleyerek bak. Bir esere dokun.'
-      : 'Tıkla, WASD veya ok tuşlarıyla yürü, fareyle bak. Bir esere tıkla. Çıkmak için ESC.';
+    // Kontrol ipucu artık kalıcı bir HUD — otomatik kaybolmuyor
+    el('gal3d-hint').innerHTML = state.isMobile
+      ? '<strong>Yürü:</strong> Sol çubuk &nbsp; <strong>Bak:</strong> Sürükle &nbsp; <strong>Seç:</strong> Dokun'
+      : '<strong>Yürü:</strong> WASD / Ok tuşları &nbsp; <strong>Bak:</strong> Tıkla + Fare &nbsp; <strong>Seç:</strong> Tıkla &nbsp; <strong>Çık:</strong> ESC';
     el('gal3d-hint').classList.remove('hidden');
-    clearTimeout(openGallery3D._hintTimer);
-    openGallery3D._hintTimer = setTimeout(() => el('gal3d-hint')?.classList.add('hidden'), 5000);
+    el('gal3d-minimap-wrap').classList.remove('hidden');
+    const badgeSchool = el('gal3d-badge-school');
+    if (badgeSchool) badgeSchool.textContent = typeof SCHOOL_NAME !== 'undefined' ? SCHOOL_NAME : 'Sanal Sergi';
 
     setupScene(container);
     const room = buildRoom(images.length);
@@ -644,4 +842,6 @@
   window.openGallery3D = openGallery3D;
   window.closeGallery3D = closeGallery3D;
   window.gallery3DExitFocus = exitFocus;
+  window.gallery3DNext = () => focusAdjacentFrame(1);
+  window.gallery3DPrev = () => focusAdjacentFrame(-1);
 })();

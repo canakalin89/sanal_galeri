@@ -97,8 +97,27 @@
       <p>Salon hazırlanıyor…</p>
     </div>
 
-    <button class="gal3d-close" id="gal3d-close" aria-label="3D salondan çık">&#x2715;</button>
-    <p class="gal3d-hint hidden" id="gal3d-hint"></p>
+    <!-- Sol üst: okul rozeti -->
+    <div class="gal3d-badge">
+      <img src="/assets/logo.png" alt="" />
+      <div class="gal3d-badge-text">
+        <span id="gal3d-badge-school"></span>
+        <span class="gal3d-badge-sub">Sanal Sergi</span>
+      </div>
+    </div>
+
+    <!-- Sağ üst: çıkış -->
+    <button class="gal3d-close" id="gal3d-close">
+      <span>&#8592;</span> 2D Galeriye Dön
+    </button>
+
+    <!-- Sol alt: kontrol rehberi (kalıcı) -->
+    <div class="gal3d-hint hidden" id="gal3d-hint"></div>
+
+    <!-- Alt orta: mini harita -->
+    <div class="gal3d-minimap-wrap hidden" id="gal3d-minimap-wrap">
+      <canvas id="gal3d-minimap" width="120" height="120"></canvas>
+    </div>
 
     <div class="gal3d-joystick hidden" id="gal3d-joystick">
       <div class="gal3d-joy-base" id="gal3d-joy-base">
@@ -106,11 +125,16 @@
       </div>
     </div>
 
+    <!-- Sağ alt: eser bilgi kartı -->
     <div class="gal3d-card hidden" id="gal3d-card">
       <button class="gal3d-card-close" id="gal3d-card-close" aria-label="Kapat">&#x2715;</button>
       <h3 id="gal3d-card-title"></h3>
       <p id="gal3d-card-caption"></p>
       <span id="gal3d-card-artist" class="gal3d-card-artist"></span>
+      <div class="gal3d-card-nav">
+        <button id="gal3d-card-prev">&#8249; Önceki</button>
+        <button id="gal3d-card-next">Sonraki &#8250;</button>
+      </div>
     </div>
   </div>
 
