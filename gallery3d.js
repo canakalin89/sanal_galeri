@@ -126,9 +126,11 @@
   /* ─── SALON ÜRETİMİ ──────────────────────────────────────── */
 
   function buildRoom(count) {
-    // Eserler artık 3 duvara dağıtılıyor (güney duvarı karşılama panosuna ayrılmış).
-    const perWallEstimate = Math.max(1, Math.ceil(count / 3));
-    const wallLen = Math.max(10, perWallEstimate * 3.4 + 2);
+    // Eserler artık 4 duvara eşit dağıtılıyor (karşılama panosu artık ayrı,
+    // serbest duran bir bölmede — güney duvarı da eserlere açık).
+    // Daha kompakt bir salon için oda boyutu daha sıkı hesaplanıyor.
+    const perWallEstimate = Math.max(1, Math.ceil(count / 4));
+    const wallLen = Math.max(8, perWallEstimate * 2.7 + 2.2);
     state.roomHalfWidth = wallLen / 2;
     state.roomHalfDepth = wallLen / 2;
 
@@ -144,11 +146,13 @@
 
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(wallLen, wallLen), floorMat);
     floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
     group.add(floor);
 
     const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(wallLen, wallLen), ceilMat);
     ceiling.rotation.x = Math.PI / 2;
     ceiling.position.y = state.wallHeight;
+    ceiling.receiveShadow = true;
     group.add(ceiling);
 
     // Ahşap tavan kirişleri — düz tavanı kırıp gerçek bir galeri mimarisi hissi verir
@@ -174,21 +178,25 @@
 
     const north = new THREE.Mesh(wallGeoNS, wallMat);
     north.position.set(0, state.wallHeight / 2, -state.roomHalfDepth);
+    north.receiveShadow = true;
     group.add(north);
 
     const south = new THREE.Mesh(wallGeoNS, wallMat);
     south.position.set(0, state.wallHeight / 2, state.roomHalfDepth);
     south.rotation.y = Math.PI;
+    south.receiveShadow = true;
     group.add(south);
 
     const east = new THREE.Mesh(wallGeoEW, wallMat);
     east.position.set(state.roomHalfWidth, state.wallHeight / 2, 0);
     east.rotation.y = -Math.PI / 2;
+    east.receiveShadow = true;
     group.add(east);
 
     const west = new THREE.Mesh(wallGeoEW, wallMat);
     west.position.set(-state.roomHalfWidth, state.wallHeight / 2, 0);
     west.rotation.y = Math.PI / 2;
+    west.receiveShadow = true;
     group.add(west);
 
     // Süpürgelik — dört duvarın dibinde altın şerit, odayı "oturmuş" ve bakımlı gösterir
@@ -269,10 +277,13 @@
     const benchGroup = new THREE.Group();
     const benchPad = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.12, 0.55), benchPadMat);
     benchPad.position.y = 0.42;
+    benchPad.castShadow = true;
+    benchPad.receiveShadow = true;
     benchGroup.add(benchPad);
     [[-0.65, -0.2], [0.65, -0.2], [-0.65, 0.2], [0.65, 0.2]].forEach(([x, z]) => {
       const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.4, 0.08), benchWoodMat);
       leg.position.set(x, 0.2, z);
+      leg.castShadow = true;
       benchGroup.add(leg);
     });
     benchGroup.position.set(0, 0, -1.8); // kamera başlangıç noktasının önünde, kuzey duvarına bakar
@@ -285,6 +296,8 @@
       const potMat = new THREE.MeshStandardMaterial({ color: 0x5a4a3a, roughness: 0.8 });
       const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.16, 0.32, 12), potMat);
       pot.position.y = 0.16;
+      pot.castShadow = true;
+      pot.receiveShadow = true;
       plantGroup.add(pot);
       const leafMat = new THREE.MeshStandardMaterial({ color: 0x3d6b3f, roughness: 0.7 });
       for (let i = 0; i < 6; i++) {
@@ -293,6 +306,7 @@
         leaf.position.set(Math.cos(angle) * 0.1, 0.55 + Math.random() * 0.15, Math.sin(angle) * 0.1);
         leaf.rotation.z = Math.cos(angle) * 0.3;
         leaf.rotation.x = Math.sin(angle) * 0.3;
+        leaf.castShadow = true;
         plantGroup.add(leaf);
       }
       return plantGroup;
@@ -386,10 +400,18 @@
       .forEach(c => roomGroup.remove(c));
   }
 
+  function applyShadows(model) {
+    model.traverse(child => {
+      if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; }
+    });
+    return model;
+  }
+
   function enhanceRoomWithRealModels(roomGroup, signInfo) {
     // Seyir bankı
     loadModel('/vendor/models/bench.glb').then(model => {
       normalizeModel(model, 1.7);
+      applyShadows(model);
       model.position.z += -1.8;
       removeFallback(roomGroup, 'bench');
       roomGroup.add(model);
@@ -398,6 +420,7 @@
     // Saksılı bitki — 4 köşeye aynı modelden klon
     loadModel('/vendor/models/plant.glb').then(model => {
       normalizeModel(model, 1.3);
+      applyShadows(model);
       removeFallback(roomGroup, 'plant');
       const margin = 1.0;
       [
@@ -449,6 +472,7 @@
         const group = new THREE.Group();
         group.add(clone);
         normalizeModel(group, 0.6);
+        applyShadows(group);
         group.rotation.y = Math.random() * Math.PI * 2; // yaprakların "kenardan" görünmesini azaltır
         group.position.x += spot[0];
         group.position.z += spot[1];
@@ -456,11 +480,22 @@
       });
     }).catch(() => { /* aksan bitkiler olmadan devam */ });
 
-    // Avize — tavan ortasından sarkar
+    // Avize — tavan ortasından sarkar. Model tek parça bir avize (kol+gövde),
+    // önceki boyut (1.2m) devasa bir salonda görünmez kalıyordu; ayrıca hiç
+    // ışık kaynağı eklenmemişti — model sadece dekoratifti. Şimdi hem daha
+    // büyük hem de gerçek, sıcak bir nokta ışık kaynağı ile aydınlatıyor.
     loadModel('/vendor/models/chandelier.glb').then(model => {
-      const size = normalizeModel(model, 1.2);
+      const size = normalizeModel(model, 1.9);
       model.position.y += state.wallHeight - size.y - 0.05;
+      applyShadows(model);
       roomGroup.add(model);
+
+      const bulbLight = new THREE.PointLight(0xffdca8, 3.2, Math.max(state.roomHalfWidth, state.roomHalfDepth) * 1.8, 1.8);
+      bulbLight.position.set(0, state.wallHeight - size.y * 0.35, 0);
+      bulbLight.castShadow = true;
+      bulbLight.shadow.mapSize.set(1024, 1024);
+      bulbLight.shadow.bias = -0.002;
+      roomGroup.add(bulbLight);
     }).catch(() => { /* avize olmadan devam */ });
 
     // Heykel kaidesi — model aslında yan yana dizilmiş 4 ayrı kaideden oluşan
@@ -488,6 +523,7 @@
         const group = new THREE.Group();
         group.add(clone);
         normalizeModel(group, 0.95, 'y');
+        applyShadows(group);
         group.position.set(spot[0], 0, spot[1]);
         roomGroup.add(group);
       });
@@ -511,87 +547,105 @@
 
   async function placeArtworks(roomGroup, images) {
     const wallLen = state.roomHalfWidth * 2;
-    // Güney duvarı (giriş) yalnızca karşılama panosuna ayrılır — eserler
-    // panoyla çakışmasın diye o duvara hiç eser asılmıyor, kalan 3 duvara
-    // dağıtılıyor.
-    const perWall = Math.max(1, Math.ceil(images.length / 3));
-    const spacing = wallLen / (perWall + 1);
+    // Eserler artık 4 duvara ROUND-ROBIN dağıtılır (0,1,2,3,0,1,2,3,…) —
+    // hiçbir duvar boş kalmaz ve sayı 4'e bölünmese bile duvarlar arasındaki
+    // fark en fazla 1 eser olur. Karşılama panosu artık ayrı bir bölmede
+    // olduğundan güney duvarı da eserlere açık.
     const wallDefs = [
       { normal: [0, 0, 1],  base: [0, 0, -state.roomHalfDepth + 0.05], axis: 'x' },
       { normal: [-1, 0, 0], base: [state.roomHalfWidth - 0.05, 0, 0],  axis: 'z' },
+      { normal: [0, 0, -1], base: [0, 0, state.roomHalfDepth - 0.05],  axis: 'x', flip: true },
       { normal: [1, 0, 0],  base: [-state.roomHalfWidth + 0.05, 0, 0], axis: 'z', flip: true }
     ];
+    const slotsPerWall = Math.max(1, Math.ceil(images.length / wallDefs.length));
+    const spacing = wallLen / (slotsPerWall + 1);
 
     const texWidth = state.isMobile ? 640 : 1024;
-    let idx = 0;
 
-    for (const wall of wallDefs) {
-      for (let i = 0; i < perWall && idx < images.length; i++, idx++) {
-        const img = images[idx];
-        const offset = -wallLen / 2 + spacing * (i + 1);
-        const pos = wall.axis === 'x'
-          ? [offset, 2.4, wall.base[2]]
-          : [wall.base[0], 2.4, wall.flip ? -offset : offset];
+    images.forEach((img, idx) => {
+      const wall = wallDefs[idx % wallDefs.length];
+      const slot = Math.floor(idx / wallDefs.length);
+      const offset = -wallLen / 2 + spacing * (slot + 1);
+      const pos = wall.axis === 'x'
+        ? [offset, 2.4, wall.base[2]]
+        : [wall.base[0], 2.4, wall.flip ? -offset : offset];
 
-        const frameGroup = new THREE.Group();
-        frameGroup.position.set(pos[0], pos[1], pos[2]);
-        // Hedef, odanın merkezine doğru (normal yönünde) olduğunda lookAt kimlik
-        // rotasyonu üretir: yerel +Z ekseni dünya +normal'e denk gelir. Böylece
-        // yerel z>0 (tuval, plaket) izleyiciye yakın, z<0 (çerçeve) duvara yakın olur.
-        frameGroup.lookAt(pos[0] + wall.normal[0], pos[1], pos[2] + wall.normal[2]);
+      const frameGroup = new THREE.Group();
+      frameGroup.position.set(pos[0], pos[1], pos[2]);
+      // Hedef, odanın merkezine doğru (normal yönünde) olduğunda lookAt kimlik
+      // rotasyonu üretir: yerel +Z ekseni dünya +normal'e denk gelir. Böylece
+      // yerel z>0 (tuval, plaket) izleyiciye yakın, z<0 (çerçeve) duvara yakın olur.
+      frameGroup.lookAt(pos[0] + wall.normal[0], pos[1], pos[2] + wall.normal[2]);
 
-        // Yer tutucu (yüklenene kadar)
-        // NOT: canvas / çerçeve / plaket arasında Z-fighting olmaması için
-        // her katman net bir Z boşluğuyla ayrılıyor (çerçeve arkada, tuval önde).
-        const placeholderMat = new THREE.MeshStandardMaterial({ color: 0x1c2c48 });
-        const canvasMesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 2.0), placeholderMat);
-        canvasMesh.position.z = 0.03;
-        frameGroup.add(canvasMesh);
+      // Yer tutucu (yüklenene kadar)
+      // NOT: canvas / çerçeve / plaket arasında Z-fighting olmaması için
+      // her katman net bir Z boşluğuyla ayrılıyor (çerçeve arkada, tuval önde).
+      const placeholderMat = new THREE.MeshStandardMaterial({ color: 0x1c2c48 });
+      const canvasMesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 2.0), placeholderMat);
+      canvasMesh.position.z = 0.03;
+      canvasMesh.receiveShadow = true;
+      frameGroup.add(canvasMesh);
 
-        const frameMat = new THREE.MeshStandardMaterial({ color: 0xc9a84c, roughness: 0.35, metalness: 0.55 });
-        const frameThick = 0.08;
-        const frameDepth = 0.04;
-        const frameBorder = new THREE.Mesh(
-          new THREE.BoxGeometry(1.6 + frameThick * 2, 2.0 + frameThick * 2, frameDepth),
-          frameMat
-        );
-        frameBorder.position.z = -0.02;
-        frameGroup.add(frameBorder);
+      const frameMat = new THREE.MeshStandardMaterial({ color: 0xc9a84c, roughness: 0.35, metalness: 0.55 });
+      const frameThick = 0.08;
+      const frameDepth = 0.04;
+      const frameBorder = new THREE.Mesh(
+        new THREE.BoxGeometry(1.6 + frameThick * 2, 2.0 + frameThick * 2, frameDepth),
+        frameMat
+      );
+      frameBorder.position.z = -0.02;
+      frameBorder.castShadow = true;
+      frameGroup.add(frameBorder);
 
-        const plaqueTex = makePlaqueTexture(img.title || null, img.artist || null);
-        let plaque = null;
-        if (plaqueTex) {
-          const plaqueMat = new THREE.MeshBasicMaterial({ map: plaqueTex });
-          plaque = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.22), plaqueMat);
-          plaque.position.set(0, -1.35, 0.05);
-          frameGroup.add(plaque);
-        }
-
-        frameGroup.userData.imgData = img;
-        frameGroup.userData.canvasMesh = canvasMesh;
-        frameGroup.userData.basePosition = frameGroup.position.clone();
-        frameGroup.userData.normal = new THREE.Vector3(wall.normal[0], 0, wall.normal[2]);
-
-        roomGroup.add(frameGroup);
-        state.frames.push(frameGroup);
-
-        // Doku asenkron yüklenir, yüklenince gerçek boy oranına göre yeniden boyutlanır
-        loadImageTexture(img.thumbSrc ? img.thumbSrc.replace(/=w\d+/, '=w' + texWidth) : img.src).then(tex => {
-          if (!tex) return;
-          const ratio = tex.image.width / tex.image.height;
-          let w = 1.8, h = 1.8 / ratio;
-          if (h > 2.2) { h = 2.2; w = h * ratio; }
-          canvasMesh.geometry.dispose();
-          canvasMesh.geometry = new THREE.PlaneGeometry(w, h);
-          canvasMesh.material.dispose();
-          canvasMesh.material = new THREE.MeshBasicMaterial({ map: tex });
-
-          frameBorder.geometry.dispose();
-          frameBorder.geometry = new THREE.BoxGeometry(w + frameThick * 2, h + frameThick * 2, frameDepth);
-          if (plaque) plaque.position.y = -(h / 2) - 0.3;
-        });
+      const plaqueTex = makePlaqueTexture(img.title || null, img.artist || null);
+      let plaque = null;
+      if (plaqueTex) {
+        const plaqueMat = new THREE.MeshBasicMaterial({ map: plaqueTex });
+        plaque = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.22), plaqueMat);
+        plaque.position.set(0, -1.35, 0.05);
+        frameGroup.add(plaque);
       }
-    }
+
+      frameGroup.userData.imgData = img;
+      frameGroup.userData.canvasMesh = canvasMesh;
+      frameGroup.userData.basePosition = frameGroup.position.clone();
+      frameGroup.userData.normal = new THREE.Vector3(wall.normal[0], 0, wall.normal[2]);
+
+      roomGroup.add(frameGroup);
+      state.frames.push(frameGroup);
+
+      // Her eserin kendi spot ışığı — resmin önünde/üstünde, aşağı doğru
+      // tutan sıcak bir spot. Performans için gölge düşürmüyor (yalnızca
+      // ana yön ışığı gölge hesaplıyor); onlarca eser olsa bile ucuzdur.
+      const lightOut = 0.85;
+      const spot = new THREE.SpotLight(0xfff2d6, 6, 4.2, Math.PI / 6, 0.55, 1.4);
+      spot.position.set(
+        pos[0] + wall.normal[0] * lightOut,
+        pos[1] + 1.15,
+        pos[2] + wall.normal[2] * lightOut
+      );
+      const spotTarget = new THREE.Object3D();
+      spotTarget.position.set(pos[0], pos[1] - 0.25, pos[2]);
+      roomGroup.add(spotTarget);
+      spot.target = spotTarget;
+      roomGroup.add(spot);
+
+      // Doku asenkron yüklenir, yüklenince gerçek boy oranına göre yeniden boyutlanır
+      loadImageTexture(img.thumbSrc ? img.thumbSrc.replace(/=w\d+/, '=w' + texWidth) : img.src).then(tex => {
+        if (!tex) return;
+        const ratio = tex.image.width / tex.image.height;
+        let w = 1.8, h = 1.8 / ratio;
+        if (h > 2.2) { h = 2.2; w = h * ratio; }
+        canvasMesh.geometry.dispose();
+        canvasMesh.geometry = new THREE.PlaneGeometry(w, h);
+        canvasMesh.material.dispose();
+        canvasMesh.material = new THREE.MeshBasicMaterial({ map: tex });
+
+        frameBorder.geometry.dispose();
+        frameBorder.geometry = new THREE.BoxGeometry(w + frameThick * 2, h + frameThick * 2, frameDepth);
+        if (plaque) plaque.position.y = -(h / 2) - 0.3;
+      });
+    });
   }
 
   /* ─── KARŞILAMA PANOSU (okul logosu + sergi bilgisi) ────── */
@@ -742,6 +796,8 @@
       partitionMat
     );
     partition.position.set(0, partitionHeight / 2, partitionZ);
+    partition.castShadow = true;
+    partition.receiveShadow = true;
     roomGroup.add(partition);
 
     const y = partitionHeight / 2 + 0.1;
@@ -783,16 +839,29 @@
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(renderer.domElement);
 
     // Parlak, sıcak genel aydınlatma — flat/steril "backrooms" hissi yerine
-    // rahat, gerçek bir müze salonu izlenimi
-    const ambient = new THREE.AmbientLight(0xfff1de, 0.95);
+    // rahat, gerçek bir müze salonu izlenimi. Ana yön ışığı gölge düşürür,
+    // ikinci ışık sadece dolgu (gölgesiz) — performans için tek gölge kaynağı yeterli.
+    const ambient = new THREE.AmbientLight(0xfff1de, 0.75);
     scene.add(ambient);
-    const dir = new THREE.DirectionalLight(0xfff0d0, 0.85);
-    dir.position.set(4, 8, 4);
+    const dir = new THREE.DirectionalLight(0xfff0d0, 0.9);
+    dir.position.set(4, 9, 4);
+    dir.castShadow = true;
+    dir.shadow.mapSize.set(2048, 2048);
+    dir.shadow.camera.left = -16;
+    dir.shadow.camera.right = 16;
+    dir.shadow.camera.top = 16;
+    dir.shadow.camera.bottom = -16;
+    dir.shadow.camera.near = 1;
+    dir.shadow.camera.far = 30;
+    dir.shadow.bias = -0.0015;
     scene.add(dir);
-    const dir2 = new THREE.DirectionalLight(0xffe8cc, 0.45);
+    scene.add(dir.target);
+    const dir2 = new THREE.DirectionalLight(0xffe8cc, 0.4);
     dir2.position.set(-4, 6, -4);
     scene.add(dir2);
 
