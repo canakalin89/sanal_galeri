@@ -126,7 +126,8 @@
   /* ─── SALON ÜRETİMİ ──────────────────────────────────────── */
 
   function buildRoom(count) {
-    const perWallEstimate = Math.max(1, Math.ceil(count / 4));
+    // Eserler artık 3 duvara dağıtılıyor (güney duvarı karşılama panosuna ayrılmış).
+    const perWallEstimate = Math.max(1, Math.ceil(count / 3));
     const wallLen = Math.max(10, perWallEstimate * 3.4 + 2);
     state.roomHalfWidth = wallLen / 2;
     state.roomHalfDepth = wallLen / 2;
@@ -354,14 +355,18 @@
     }));
   }
 
-  // Modeli verilen hedef boyuta (en büyük eksen) göre ölçekler, tabanını
-  // y=0'a, merkezini x/z=0'a oturtur. Ölçeklenmiş boyutu (Vector3) döndürür.
-  function normalizeModel(model, targetSize) {
+  // Modeli verilen hedef boyuta göre ölçekler, tabanını y=0'a, merkezini
+  // x/z=0'a oturtur. axis='max' (varsayılan) en büyük ekseni hedefe göre
+  // ölçekler; 'x'/'y'/'z' verilirse yalnızca o eksen hedef boyuta getirilir
+  // (ör. geniş ama alçak bir modelin YÜKSEKLİĞİNİ hedeflemek için).
+  // Ölçeklenmiş boyutu (Vector3) döndürür.
+  function normalizeModel(model, targetSize, axis) {
     const box = new THREE.Box3().setFromObject(model);
     const size = new THREE.Vector3();
     box.getSize(size);
-    const maxDim = Math.max(size.x, size.y, size.z) || 1;
-    model.scale.setScalar(targetSize / maxDim);
+    const refDim = axis === 'x' ? size.x : axis === 'y' ? size.y : axis === 'z' ? size.z
+      : Math.max(size.x, size.y, size.z);
+    model.scale.setScalar(targetSize / (refDim || 1));
 
     const box2 = new THREE.Box3().setFromObject(model);
     const center = new THREE.Vector3();
@@ -411,9 +416,18 @@
     // Küçük saksı aksanları — çok-nesneli kümeden (plant_accents.glb) tek tek
     // seçilip odanın çeşitli noktalarına (duvar diplerine, banka yakın) dağıtılır.
     loadModel('/vendor/models/plant_accents.glb').then(model => {
-      const pots = [];
+      const allMeshes = [];
       model.traverse(child => {
-        if (child.isMesh) pots.push(child);
+        if (child.isMesh) allMeshes.push(child);
+      });
+      // Kümede bazı varyantlar kasıtlı olarak "devrilmiş saksı" şeklinde
+      // modellenmiş olabilir (çeşitlilik için) — bunları eleyip yalnızca
+      // dik duran (yükseklik > taban ölçüleri) saksıları seçiyoruz.
+      const pots = allMeshes.filter(mesh => {
+        const box = new THREE.Box3().setFromObject(mesh);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        return size.y > size.x && size.y > size.z;
       });
       if (pots.length === 0) return;
 
@@ -449,11 +463,29 @@
       roomGroup.add(model);
     }).catch(() => { /* avize olmadan devam */ });
 
-    // Heykel kaidesi — karşılama panosunun yanında dekoratif podyum
+    // Heykel kaidesi — model aslında yan yana dizilmiş 4 ayrı kaideden oluşan
+    // bir küme; tek parça gibi ölçeklenirse her biri cüce kalır. Her kaideyi
+    // kendi başına çıkarıp odanın farklı noktalarına (karşılama panosunun
+    // iki yanına) ayrı ayrı yerleştiriyoruz.
     loadModel('/vendor/models/pedestal.glb').then(model => {
-      normalizeModel(model, 1.0);
-      model.position.set(2.3, 0, state.roomHalfDepth - 1.6);
-      roomGroup.add(model);
+      const stands = [];
+      model.traverse(child => { if (child.isMesh) stands.push(child); });
+      if (stands.length === 0) return;
+
+      const spots = [
+        [state.roomHalfWidth - 1.3, state.roomHalfDepth - 1.3],
+        [-state.roomHalfWidth + 1.3, state.roomHalfDepth - 1.3]
+      ];
+      spots.forEach((spot, i) => {
+        const stand = stands[i % stands.length];
+        const clone = stand.clone();
+        clone.geometry = stand.geometry;
+        const group = new THREE.Group();
+        group.add(clone);
+        normalizeModel(group, 0.95, 'y');
+        group.position.set(spot[0], 0, spot[1]);
+        roomGroup.add(group);
+      });
     }).catch(() => { /* podyum olmadan devam */ });
   }
 
@@ -474,12 +506,14 @@
 
   async function placeArtworks(roomGroup, images) {
     const wallLen = state.roomHalfWidth * 2;
-    const perWall = Math.max(1, Math.ceil(images.length / 4));
+    // Güney duvarı (giriş) yalnızca karşılama panosuna ayrılır — eserler
+    // panoyla çakışmasın diye o duvara hiç eser asılmıyor, kalan 3 duvara
+    // dağıtılıyor.
+    const perWall = Math.max(1, Math.ceil(images.length / 3));
     const spacing = wallLen / (perWall + 1);
     const wallDefs = [
       { normal: [0, 0, 1],  base: [0, 0, -state.roomHalfDepth + 0.05], axis: 'x' },
       { normal: [-1, 0, 0], base: [state.roomHalfWidth - 0.05, 0, 0],  axis: 'z' },
-      { normal: [0, 0, -1], base: [0, 0, state.roomHalfDepth - 0.05],  axis: 'x', flip: true },
       { normal: [1, 0, 0],  base: [-state.roomHalfWidth + 0.05, 0, 0], axis: 'z', flip: true }
     ];
 
