@@ -386,7 +386,7 @@
       .forEach(c => roomGroup.remove(c));
   }
 
-  function enhanceRoomWithRealModels(roomGroup) {
+  function enhanceRoomWithRealModels(roomGroup, signInfo) {
     // Seyir bankı
     loadModel('/vendor/models/bench.glb').then(model => {
       normalizeModel(model, 1.7);
@@ -465,16 +465,21 @@
 
     // Heykel kaidesi — model aslında yan yana dizilmiş 4 ayrı kaideden oluşan
     // bir küme; tek parça gibi ölçeklenirse her biri cüce kalır. Her kaideyi
-    // kendi başına çıkarıp odanın farklı noktalarına (karşılama panosunun
-    // iki yanına) ayrı ayrı yerleştiriyoruz.
+    // kendi başına çıkarıp karşılama panosunun bulunduğu orta bölmenin
+    // (partition) iki yanına ayrı ayrı yerleştiriyoruz.
     loadModel('/vendor/models/pedestal.glb').then(model => {
       const stands = [];
       model.traverse(child => { if (child.isMesh) stands.push(child); });
       if (stands.length === 0) return;
 
+      const pz = signInfo ? signInfo.partitionZ : -state.roomHalfDepth + 1.3;
+      const half = Math.min(
+        signInfo ? signInfo.partitionWidth / 2 + 0.7 : state.roomHalfWidth - 1.3,
+        state.roomHalfWidth - 0.6
+      );
       const spots = [
-        [state.roomHalfWidth - 1.3, state.roomHalfDepth - 1.3],
-        [-state.roomHalfWidth + 1.3, state.roomHalfDepth - 1.3]
+        [half, pz],
+        [-half, pz]
       ];
       spots.forEach((spot, i) => {
         const stand = stands[i % stands.length];
@@ -601,7 +606,40 @@
     });
   }
 
-  function wrapText(ctx, text, maxWidth, maxLines) {
+  // Metni verilen kutuya sığdırmak için font boyutunu adım adım küçültür;
+  // en küçük boyutta bile sığmazsa son satırı "…" ile keser.
+  function fitParagraph(ctx, text, maxWidth, maxHeight, startSize, minSize, lineHeightRatio) {
+    lineHeightRatio = lineHeightRatio || 1.4;
+    const wrap = (fontSize) => {
+      ctx.font = fontSize + 'px Georgia, serif';
+      const words = text.split(/\s+/);
+      const lines = [];
+      let line = '';
+      for (const word of words) {
+        const test = line ? line + ' ' + word : word;
+        if (ctx.measureText(test).width > maxWidth && line) {
+          lines.push(line);
+          line = word;
+        } else {
+          line = test;
+        }
+      }
+      if (line) lines.push(line);
+      return lines;
+    };
+
+    for (let fontSize = startSize; fontSize >= minSize; fontSize -= 1) {
+      const lines = wrap(fontSize);
+      if (lines.length * fontSize * lineHeightRatio <= maxHeight) {
+        return { fontSize, lineHeight: fontSize * lineHeightRatio, lines };
+      }
+    }
+
+    // En küçük boyutta da sığmıyor: sığan kadar satır al, sonuncusunu "…" ile kes.
+    const fontSize = minSize;
+    const lineHeight = fontSize * lineHeightRatio;
+    const maxLines = Math.max(1, Math.floor(maxHeight / lineHeight));
+    ctx.font = fontSize + 'px Georgia, serif';
     const words = text.split(/\s+/);
     const lines = [];
     let line = '';
@@ -616,13 +654,18 @@
       }
     }
     if (line && lines.length < maxLines) lines.push(line);
-    return lines;
+    if (lines.length >= maxLines) {
+      let last = lines[maxLines - 1];
+      while (last.length > 3 && ctx.measureText(last + '…').width > maxWidth) last = last.slice(0, -1);
+      lines[maxLines - 1] = last + '…';
+    }
+    return { fontSize, lineHeight, lines };
   }
 
-  async function addWelcomeSign(roomGroup, schoolName, exhibitionName, description) {
+  function buildWelcomeSignTexture(schoolName, exhibitionName, description, logoImg) {
     const canvas = document.createElement('canvas');
-    canvas.width = 1024;
-    canvas.height = 384;
+    canvas.width = 1100;
+    canvas.height = 480;
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#f6f2e8';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -630,11 +673,8 @@
     ctx.lineWidth = 6;
     ctx.strokeRect(6, 6, canvas.width - 12, canvas.height - 12);
 
-    let logoImg = null;
-    try { logoImg = await loadImageElement('/assets/logo.png'); } catch (e) { /* logo olmadan devam */ }
-
-    const padding = 44;
-    const logoSize = 220;
+    const padding = 48;
+    const logoSize = 240;
     let textX = padding;
 
     if (logoImg) {
@@ -650,7 +690,7 @@
       ctx.beginPath();
       ctx.arc(lx + logoSize / 2, ly + logoSize / 2, logoSize / 2, 0, Math.PI * 2);
       ctx.stroke();
-      textX = lx + logoSize + 44;
+      textX = lx + logoSize + 48;
     }
 
     const textWidth = canvas.width - textX - padding;
@@ -658,41 +698,73 @@
 
     ctx.fillStyle = '#8c8474';
     ctx.font = '600 26px Georgia, serif';
-    ctx.fillText(truncateText(ctx, (schoolName || '').toUpperCase(), textWidth), textX, 68);
+    ctx.fillText(truncateText(ctx, (schoolName || '').toUpperCase(), textWidth), textX, 66);
 
     ctx.fillStyle = '#1a1711';
-    ctx.font = '700 50px Georgia, serif';
-    ctx.fillText(truncateText(ctx, exhibitionName || 'Sanal Sergi', textWidth), textX, 128);
+    ctx.font = '700 48px Georgia, serif';
+    ctx.fillText(truncateText(ctx, exhibitionName || 'Sanal Sergi', textWidth), textX, 124);
 
     if (description) {
-      ctx.font = '23px Georgia, serif';
       ctx.fillStyle = '#4a4438';
-      const lines = wrapText(ctx, description, textWidth, 5);
-      lines.forEach((line, i) => ctx.fillText(line, textX, 172 + i * 32));
+      const descTop = 160;
+      const descMaxHeight = canvas.height - descTop - padding + 10;
+      const { lineHeight, lines } = fitParagraph(ctx, description, textWidth, descMaxHeight, 24, 16);
+      lines.forEach((line, i) => ctx.fillText(line, textX, descTop + i * lineHeight));
     }
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
+    return { tex, aspect: canvas.width / canvas.height };
+  }
+
+  async function addWelcomeSign(roomGroup, schoolName, exhibitionName, description) {
+    let logoImg = null;
+    try { logoImg = await loadImageElement('/assets/logo.png'); } catch (e) { /* logo olmadan devam */ }
+
+    const { tex, aspect } = buildWelcomeSignTexture(schoolName, exhibitionName, description, logoImg);
     const mat = new THREE.MeshBasicMaterial({ map: tex });
 
-    const signWidth = Math.min(state.roomHalfWidth * 2 - 1.6, 7.5);
-    const signHeight = signWidth * (canvas.height / canvas.width);
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(signWidth, signHeight), mat);
+    const signWidth = Math.min(state.roomHalfWidth * 1.1, 5.5);
+    const signHeight = signWidth / aspect;
+    const partitionThickness = 0.22;
+    const partitionHeight = signHeight + 0.9;
+    const partitionWidth = signWidth + 0.6;
 
-    // Güney duvarına (başlangıç noktasının arkasına) asılır — dönüp bakınca görülür,
-    // eser çerçeveleriyle çakışmaması için göz hizasının biraz üstüne yerleştirilir
-    const y = Math.min(3.1, state.wallHeight - signHeight / 2 - 0.35);
-    mesh.position.set(0, y, state.roomHalfDepth - 0.10);
-    mesh.rotation.y = Math.PI;
-    roomGroup.add(mesh);
-
-    const frameMat = new THREE.MeshStandardMaterial({ color: 0xc9a84c, roughness: 0.35, metalness: 0.55 });
-    const frameBorder = new THREE.Mesh(
-      new THREE.BoxGeometry(signWidth + 0.18, signHeight + 0.18, 0.05),
-      frameMat
+    // Serbest duran orta bölme duvarı — girişten hemen sonra, iki yüzünde de
+    // aynı karşılama panosu bulunur, böylece hangi yönden yaklaşılırsa
+    // yaklaşılsın pano görülür.
+    // Spawn noktasından (0,1.65,0) rahat okunacak bir mesafede — çok yakın
+    // olursa pano ekranı kaplar, çok uzak olursa okunmaz.
+    const partitionZ = -Math.min(4.3, Math.max(2.6, state.roomHalfDepth - 1.2));
+    const partitionMat = new THREE.MeshStandardMaterial({ color: 0xe4dac8, roughness: 0.85 });
+    const partition = new THREE.Mesh(
+      new THREE.BoxGeometry(partitionWidth, partitionHeight, partitionThickness),
+      partitionMat
     );
-    frameBorder.position.set(0, y, state.roomHalfDepth - 0.04);
-    roomGroup.add(frameBorder);
+    partition.position.set(0, partitionHeight / 2, partitionZ);
+    roomGroup.add(partition);
+
+    const y = partitionHeight / 2 + 0.1;
+    const frameMat = new THREE.MeshStandardMaterial({ color: 0xc9a84c, roughness: 0.35, metalness: 0.55 });
+
+    // Ön yüz (girişe/spawn noktasına bakar, normal +Z)
+    const frontFrame = new THREE.Mesh(new THREE.BoxGeometry(signWidth + 0.18, signHeight + 0.18, 0.05), frameMat);
+    frontFrame.position.set(0, y, partitionZ + partitionThickness / 2 + 0.03);
+    roomGroup.add(frontFrame);
+    const frontSign = new THREE.Mesh(new THREE.PlaneGeometry(signWidth, signHeight), mat);
+    frontSign.position.set(0, y, partitionZ + partitionThickness / 2 + 0.06);
+    roomGroup.add(frontSign);
+
+    // Arka yüz (kuzey duvarına doğru bakar, normal -Z) — aynı doku, 180° döndürülmüş
+    const backFrame = new THREE.Mesh(new THREE.BoxGeometry(signWidth + 0.18, signHeight + 0.18, 0.05), frameMat);
+    backFrame.position.set(0, y, partitionZ - partitionThickness / 2 - 0.03);
+    roomGroup.add(backFrame);
+    const backSign = new THREE.Mesh(new THREE.PlaneGeometry(signWidth, signHeight), mat);
+    backSign.position.set(0, y, partitionZ - partitionThickness / 2 - 0.06);
+    backSign.rotation.y = Math.PI;
+    roomGroup.add(backSign);
+
+    return { partitionZ, partitionWidth };
   }
 
   /* ─── SAHNE KURULUMU ─────────────────────────────────────── */
@@ -960,8 +1032,8 @@
     const room = buildRoom(images.length);
     scene.add(room);
     await placeArtworks(room, images);
-    await addWelcomeSign(room, schoolName, exhibitionName, exhibitionDescription);
-    enhanceRoomWithRealModels(room); // arka planda yüklenir, hazır olunca sahneye eklenir
+    const signInfo = await addWelcomeSign(room, schoolName, exhibitionName, exhibitionDescription);
+    enhanceRoomWithRealModels(room, signInfo); // arka planda yüklenir, hazır olunca sahneye eklenir
 
     if (state.isMobile) {
       setupMobileControls(container);
