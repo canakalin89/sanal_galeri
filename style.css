@@ -427,6 +427,29 @@ body {
   border-radius: 100px;
 }
 
+.btn-3d {
+  flex-shrink: 0;
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--navy-950);
+  background: linear-gradient(135deg, var(--cyan-300), var(--cyan-500));
+  border: none;
+  padding: 0.45rem 0.9rem;
+  border-radius: 100px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 2px 10px rgba(16,179,255,0.3);
+}
+
+.btn-3d:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(16,179,255,0.45);
+}
+
+.btn-3d:disabled { opacity: 0.6; cursor: wait; }
+
 .gallery-loading {
   display: flex;
   flex-direction: column;
@@ -738,6 +761,185 @@ body {
 @media (max-width: 480px) {
   .masonry-grid { columns: 2 140px; }
   .exhibitions { grid-template-columns: 1fr; padding: 1rem 0.8rem; }
+}
+
+/* ── 3D SANAL SERGİ SALONU ───────────────────── */
+.gal3d-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: #070f1a;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.gal3d-canvas-container {
+  position: absolute;
+  inset: 0;
+}
+
+.gal3d-canvas-container canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.gal3d-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  color: rgba(255,255,255,.6);
+  font-size: 0.9rem;
+  background: #070f1a;
+}
+
+.gal3d-close {
+  position: fixed;
+  top: 1.2rem;
+  right: 1.2rem;
+  z-index: 3;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid rgba(127,227,255,0.3);
+  background: rgba(10,29,51,0.65);
+  color: #fff;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.gal3d-close:hover { background: rgba(16,179,255,0.25); border-color: var(--cyan-500); }
+
+.gal3d-hint {
+  position: fixed;
+  top: 1.2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  background: rgba(10,29,51,0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(127,227,255,0.2);
+  color: rgba(255,255,255,0.85);
+  font-size: 0.82rem;
+  padding: 0.6rem 1.3rem;
+  border-radius: 100px;
+  max-width: 90vw;
+  text-align: center;
+  pointer-events: none;
+  transition: opacity 0.4s;
+}
+
+/* Sanal joystick */
+.gal3d-joystick {
+  position: fixed;
+  bottom: 2rem;
+  left: 2rem;
+  z-index: 3;
+}
+
+.gal3d-joy-base {
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  background: rgba(10,29,51,0.5);
+  border: 2px solid rgba(127,227,255,0.3);
+  position: relative;
+  touch-action: none;
+}
+
+.gal3d-joy-stick {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 46px;
+  height: 46px;
+  margin: -23px 0 0 -23px;
+  border-radius: 50%;
+  background: rgba(16,179,255,0.55);
+  border: 1px solid rgba(127,227,255,0.6);
+  transition: transform 0.05s linear;
+}
+
+/* Eser bilgi kartı */
+.gal3d-card {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  max-width: min(520px, 88vw);
+  width: 100%;
+  background: rgba(10,29,51,0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(127,227,255,0.25);
+  border-radius: 14px;
+  padding: 1.2rem 1.4rem 1.3rem;
+  animation: fadeInUp 0.3s ease both;
+}
+
+.gal3d-card-close {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.6);
+  cursor: pointer;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s;
+}
+
+.gal3d-card-close:hover { background: rgba(251,23,59,0.25); color: #fff; }
+
+#gal3d-card-title {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 0.4rem;
+  padding-right: 1.5rem;
+}
+#gal3d-card-title:empty { display: none; }
+
+#gal3d-card-caption {
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: rgba(255,255,255,0.65);
+  margin-bottom: 0.4rem;
+}
+#gal3d-card-caption:empty { display: none; }
+
+.gal3d-card-artist {
+  display: block;
+  font-size: 0.82rem;
+  font-style: italic;
+  color: var(--cyan-300);
+}
+.gal3d-card-artist:empty { display: none; }
+
+@media (max-width: 600px) {
+  .gal3d-joystick { bottom: 1.2rem; left: 1.2rem; }
+  .gal3d-joy-base { width: 92px; height: 92px; }
+  .gal3d-joy-stick { width: 38px; height: 38px; margin: -19px 0 0 -19px; }
+  .gal3d-card { bottom: 1rem; padding: 1rem 1.1rem 1.1rem; }
+  .gal3d-hint { font-size: 0.74rem; padding: 0.5rem 1rem; top: 0.8rem; }
 }
 
 /* ── EMBED MODU ──────────────────────────── */

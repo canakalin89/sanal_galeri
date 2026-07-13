@@ -82,9 +82,36 @@
         <h2 id="gallery-title"></h2>
       </div>
       <span class="gallery-count" id="gallery-count"></span>
+      <button id="btn-3d" class="btn-3d hidden">&#127963; 3D Salonda Gez</button>
     </div>
     <p id="gallery-desc" class="gallery-desc hidden"></p>
     <main class="masonry-grid" id="gallery"></main>
+  </div>
+
+  <!-- 3D SANAL SERGİ SALONU -->
+  <div class="gal3d-overlay hidden" id="gal3d-overlay">
+    <div class="gal3d-canvas-container" id="gal3d-canvas-container"></div>
+
+    <div class="gal3d-loading" id="gal3d-loading">
+      <div class="spinner"></div>
+      <p>Salon hazırlanıyor…</p>
+    </div>
+
+    <button class="gal3d-close" id="gal3d-close" aria-label="3D salondan çık">&#x2715;</button>
+    <p class="gal3d-hint hidden" id="gal3d-hint"></p>
+
+    <div class="gal3d-joystick hidden" id="gal3d-joystick">
+      <div class="gal3d-joy-base" id="gal3d-joy-base">
+        <div class="gal3d-joy-stick" id="gal3d-joy-stick"></div>
+      </div>
+    </div>
+
+    <div class="gal3d-card hidden" id="gal3d-card">
+      <button class="gal3d-card-close" id="gal3d-card-close" aria-label="Kapat">&#x2715;</button>
+      <h3 id="gal3d-card-title"></h3>
+      <p id="gal3d-card-caption"></p>
+      <span id="gal3d-card-artist" class="gal3d-card-artist"></span>
+    </div>
   </div>
 
   <!-- Lightbox -->

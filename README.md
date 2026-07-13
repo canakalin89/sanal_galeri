@@ -37,6 +37,11 @@ yayınlamanıza (deploy) gerek kalmadan otomatik olarak görünür.
 - **Lightbox** — Tam ekran görüntüleme, başlık/açıklama/sanatçı bilgisi,
   klavye ve dokunmatik (swipe) navigasyon.
 - **Mobil uyumlu** — Telefon ve bilgisayardan rahat görüntüleme.
+- **3D Sanal Sergi Salonu** — Sergi sayfasındaki "🏛 3D Salonda Gez" butonuyla,
+  eserlerin altın çerçeveler içinde asılı olduğu procedural bir müze salonunda
+  serbestçe gezinilebilir (PC'de WASD/fare, mobilde joystick/dokunmatik).
+  Bir esere tıklanınca kamera önüne yaklaşır ve bilgi kartı açılır. Bu mod
+  yalnızca butona basılınca yüklenir, normal galeri deneyimini yavaşlatmaz.
 - **Yönetim Paneli** — Şifre korumalı; sergi oluşturma, düzenleme, kaldırma.
 - **Gömme (iframe) desteği** — Herhangi bir sergiyi başka bir web sitesine
   gömmek için hazır kod üretici.
@@ -101,6 +106,9 @@ sanal_galeri/
 ├── admin.html             # Yönetim paneli
 ├── admin.css              # Yönetim paneli stilleri
 ├── admin-app.js           # Yönetim paneli mantığı
+├── gallery3d.js            # 3D sanal sergi salonu (yalnızca butonla lazy-load)
+├── vendor/
+│   └── three.module.js     # Three.js (yerel — CDN bağımlılığı yok)
 ├── vercel.json             # Vercel yapılandırması
 └── api/
     ├── auth.js             # Kimlik doğrulama serverless function
@@ -140,6 +148,10 @@ başka bir web sitesine `<iframe>` ile gömmek için hazır kod üretir:
 ```html
 <iframe src="https://siteniz.vercel.app/?embed=1#hat-sergisi" width="100%" height="600px" frameborder="0"></iframe>
 ```
+
+> Not: 3D salon modunda fare kilidi (pointer lock) kullanılır. Gömülü
+> (iframe) kullanımda bunun düzgün çalışması için iframe etiketine
+> `allow="fullscreen; pointer-lock"` eklenmesi önerilir.
 
 ## Lisans
 

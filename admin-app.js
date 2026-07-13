@@ -548,7 +548,7 @@ function updateEmbedCode() {
   let src = baseUrl + '/?embed=1';
   if (target) src += '#' + target;
 
-  const code = `<iframe src="${src}" width="${width}" height="${height}" frameborder="0" style="border:none;border-radius:4px;" allowfullscreen></iframe>`;
+  const code = `<iframe src="${src}" width="${width}" height="${height}" frameborder="0" style="border:none;border-radius:4px;" allow="fullscreen; pointer-lock" allowfullscreen></iframe>`;
   document.getElementById('embed-code').value = code;
 }
 

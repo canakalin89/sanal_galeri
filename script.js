@@ -161,6 +161,9 @@ async function showGallery(exhibition) {
   const countEl = document.getElementById('gallery-count');
   countEl.textContent = '';
 
+  const btn3d = document.getElementById('btn-3d');
+  btn3d.classList.add('hidden');
+
   const grid = document.getElementById('gallery');
   window.scrollTo({ top: 0, behavior: 'instant' });
 
@@ -180,6 +183,9 @@ async function showGallery(exhibition) {
     grid.innerHTML = '<div class="gallery-error"><strong>Bu sergide henüz eser yok.</strong></div>';
     return;
   }
+
+  btn3d.classList.remove('hidden');
+  btn3d.onclick = () => open3DGallery(images, exhibition.name);
 
   images.forEach((img, i) => {
     const el = document.createElement('div');
@@ -289,6 +295,47 @@ lb.addEventListener('touchend', e => {
   const dx = e.changedTouches[0].clientX - touchStartX;
   if (Math.abs(dx) > 50) { dx < 0 ? next() : prev(); }
 }, { passive: true });
+
+/* ─── 3D SANAL SERGİ SALONU (lazy-load) ──────────────────── */
+
+let gallery3DLoading = null;
+
+function loadGallery3DScript() {
+  if (window.openGallery3D) return Promise.resolve();
+  if (gallery3DLoading) return gallery3DLoading;
+  gallery3DLoading = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'gallery3d.js';
+    s.onload = resolve;
+    s.onerror = () => { gallery3DLoading = null; reject(new Error('gallery3d.js yüklenemedi')); };
+    document.body.appendChild(s);
+  });
+  return gallery3DLoading;
+}
+
+async function open3DGallery(images, exhibitionName) {
+  const btn = document.getElementById('btn-3d');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Yükleniyor…';
+  try {
+    await loadGallery3DScript();
+    window.openGallery3D(images, exhibitionName);
+  } catch (err) {
+    alert('3D salon yüklenemedi. İnternet bağlantınızı kontrol edip tekrar deneyin.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
+document.getElementById('gal3d-close').addEventListener('click', () => {
+  window.closeGallery3D?.();
+});
+
+document.getElementById('gal3d-card-close').addEventListener('click', () => {
+  window.gallery3DExitFocus?.();
+});
 
 /* ─── EMBED MODU ─────────────────────────────────────────── */
 
