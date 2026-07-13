@@ -22,6 +22,16 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
+
+  <!-- 3D salon (gallery3d.js) için: GLTFLoader/DRACOLoader 'three' paketini
+       bare specifier ile import ediyor, bunu yerel kopyamıza yönlendiriyoruz -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "/vendor/three.module.js"
+    }
+  }
+  </script>
 </head>
 <body>
 

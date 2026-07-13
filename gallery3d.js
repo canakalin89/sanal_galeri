@@ -6,6 +6,7 @@
   const THREE_URL = '/vendor/three.module.js';
 
   let THREE = null;
+  let gltfLoaderPromise = null;
   let renderer, scene, camera, clock;
   let animationId = null;
   let raf = null;
@@ -274,6 +275,7 @@
       benchGroup.add(leg);
     });
     benchGroup.position.set(0, 0, -1.8); // kamera başlangıç noktasının önünde, kuzey duvarına bakar
+    benchGroup.userData.isProceduralFallback = 'bench';
     group.add(benchGroup);
 
     // Saksılar — köşelere sıcaklık katan basit prosedürel bitkiler
@@ -303,6 +305,7 @@
     ].forEach(([x, z]) => {
       const plant = makePlant();
       plant.position.set(x, 0, z);
+      plant.userData.isProceduralFallback = 'plant';
       group.add(plant);
     });
 
@@ -323,6 +326,135 @@
     });
 
     return group;
+  }
+
+  /* ─── GERÇEK 3D MODELLER (GLTF/GLB) ──────────────────────── */
+  // Prosedürel mobilyaların yerini alır; yüklenemezse sessizce prosedürel
+  // halleri korunur (yedek/fallback).
+
+  async function getGLTFLoader() {
+    if (gltfLoaderPromise) return gltfLoaderPromise;
+    gltfLoaderPromise = (async () => {
+      const [{ GLTFLoader }, { DRACOLoader }] = await Promise.all([
+        import('/vendor/loaders/GLTFLoader.js'),
+        import('/vendor/loaders/DRACOLoader.js')
+      ]);
+      const dracoLoader = new DRACOLoader();
+      dracoLoader.setDecoderPath('/vendor/draco/');
+      const loader = new GLTFLoader();
+      loader.setDRACOLoader(dracoLoader);
+      return loader;
+    })();
+    return gltfLoaderPromise;
+  }
+
+  function loadModel(url) {
+    return getGLTFLoader().then(loader => new Promise((resolve, reject) => {
+      loader.load(url, gltf => resolve(gltf.scene), undefined, reject);
+    }));
+  }
+
+  // Modeli verilen hedef boyuta (en büyük eksen) göre ölçekler, tabanını
+  // y=0'a, merkezini x/z=0'a oturtur. Ölçeklenmiş boyutu (Vector3) döndürür.
+  function normalizeModel(model, targetSize) {
+    const box = new THREE.Box3().setFromObject(model);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const maxDim = Math.max(size.x, size.y, size.z) || 1;
+    model.scale.setScalar(targetSize / maxDim);
+
+    const box2 = new THREE.Box3().setFromObject(model);
+    const center = new THREE.Vector3();
+    box2.getCenter(center);
+    model.position.x -= center.x;
+    model.position.z -= center.z;
+    model.position.y -= box2.min.y;
+
+    const finalSize = new THREE.Vector3();
+    box2.getSize(finalSize);
+    return finalSize;
+  }
+
+  function removeFallback(roomGroup, kind) {
+    roomGroup.children
+      .filter(c => c.userData.isProceduralFallback === kind)
+      .forEach(c => roomGroup.remove(c));
+  }
+
+  function enhanceRoomWithRealModels(roomGroup) {
+    // Seyir bankı
+    loadModel('/vendor/models/bench.glb').then(model => {
+      normalizeModel(model, 1.7);
+      model.position.z += -1.8;
+      removeFallback(roomGroup, 'bench');
+      roomGroup.add(model);
+    }).catch(() => { /* prosedürel bank kalır */ });
+
+    // Saksılı bitki — 4 köşeye aynı modelden klon
+    loadModel('/vendor/models/plant.glb').then(model => {
+      normalizeModel(model, 1.3);
+      removeFallback(roomGroup, 'plant');
+      const margin = 1.0;
+      [
+        [state.roomHalfWidth - margin, state.roomHalfDepth - margin],
+        [-state.roomHalfWidth + margin, state.roomHalfDepth - margin],
+        [state.roomHalfWidth - margin, -state.roomHalfDepth + margin],
+        [-state.roomHalfWidth + margin, -state.roomHalfDepth + margin]
+      ].forEach(([x, z]) => {
+        const clone = model.clone();
+        clone.position.x += x;
+        clone.position.z += z;
+        roomGroup.add(clone);
+      });
+    }).catch(() => { /* prosedürel bitkiler kalır */ });
+
+    // Küçük saksı aksanları — çok-nesneli kümeden (plant_accents.glb) tek tek
+    // seçilip odanın çeşitli noktalarına (duvar diplerine, banka yakın) dağıtılır.
+    loadModel('/vendor/models/plant_accents.glb').then(model => {
+      const pots = [];
+      model.traverse(child => {
+        if (child.isMesh) pots.push(child);
+      });
+      if (pots.length === 0) return;
+
+      const margin = 0.55;
+      const spots = [
+        [0, -state.roomHalfDepth + margin],                          // banka yakın (kuzey duvar dibi)
+        [state.roomHalfWidth - margin, 0],                           // doğu duvar orta
+        [-state.roomHalfWidth + margin, 0],                          // batı duvar orta
+        [state.roomHalfWidth - margin, state.roomHalfDepth * 0.5],
+        [-state.roomHalfWidth + margin, state.roomHalfDepth * 0.5],
+        [state.roomHalfWidth - margin, -state.roomHalfDepth * 0.5],
+        [-state.roomHalfWidth + margin, -state.roomHalfDepth * 0.5]
+      ];
+
+      spots.forEach((spot, i) => {
+        const pot = pots[i % pots.length];
+        const clone = pot.clone();
+        clone.geometry = pot.geometry; // geometri paylaşılır, dönüştürülmez
+        const group = new THREE.Group();
+        group.add(clone);
+        normalizeModel(group, 0.6);
+        group.rotation.y = Math.random() * Math.PI * 2; // yaprakların "kenardan" görünmesini azaltır
+        group.position.x += spot[0];
+        group.position.z += spot[1];
+        roomGroup.add(group);
+      });
+    }).catch(() => { /* aksan bitkiler olmadan devam */ });
+
+    // Avize — tavan ortasından sarkar
+    loadModel('/vendor/models/chandelier.glb').then(model => {
+      const size = normalizeModel(model, 1.2);
+      model.position.y += state.wallHeight - size.y - 0.05;
+      roomGroup.add(model);
+    }).catch(() => { /* avize olmadan devam */ });
+
+    // Heykel kaidesi — karşılama panosunun yanında dekoratif podyum
+    loadModel('/vendor/models/pedestal.glb').then(model => {
+      normalizeModel(model, 1.0);
+      model.position.set(2.3, 0, state.roomHalfDepth - 1.6);
+      roomGroup.add(model);
+    }).catch(() => { /* podyum olmadan devam */ });
   }
 
   /* ─── ESER ÇERÇEVESİ ─────────────────────────────────────── */
@@ -795,6 +927,7 @@
     scene.add(room);
     await placeArtworks(room, images);
     await addWelcomeSign(room, schoolName, exhibitionName, exhibitionDescription);
+    enhanceRoomWithRealModels(room); // arka planda yüklenir, hazır olunca sahneye eklenir
 
     if (state.isMobile) {
       setupMobileControls(container);
