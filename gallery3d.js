@@ -43,6 +43,8 @@
   /* ─── DOKU YARDIMCILARI ──────────────────────────────────── */
 
   function makePlaqueTexture(title, sub) {
+    if (!title && !sub) return null; // ikisi de yoksa plaket hiç oluşturulmaz
+
     const canvas = document.createElement('canvas');
     canvas.width = 512;
     canvas.height = 128;
@@ -52,14 +54,17 @@
     ctx.strokeStyle = '#c9a84c';
     ctx.lineWidth = 4;
     ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
-    ctx.fillStyle = '#1a1711';
-    ctx.font = '600 34px Georgia, serif';
     ctx.textAlign = 'center';
-    ctx.fillText(truncateText(ctx, title || 'İsimsiz Eser', canvas.width - 40), canvas.width / 2, 56);
+
+    if (title) {
+      ctx.font = '600 34px Georgia, serif';
+      ctx.fillStyle = '#1a1711';
+      ctx.fillText(truncateText(ctx, title, canvas.width - 40), canvas.width / 2, sub ? 56 : 74);
+    }
     if (sub) {
       ctx.font = 'italic 24px Georgia, serif';
       ctx.fillStyle = '#6b6358';
-      ctx.fillText(truncateText(ctx, sub, canvas.width - 40), canvas.width / 2, 96);
+      ctx.fillText(truncateText(ctx, sub, canvas.width - 40), canvas.width / 2, title ? 96 : 74);
     }
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -106,11 +111,12 @@
 
     const group = new THREE.Group();
 
-    const wallMat = new THREE.MeshStandardMaterial({ color: 0x0d2036, roughness: 0.9, metalness: 0.05 });
+    // Sıcak, davetkâr müze duvarı (bordo/şarap tonu) — soğuk/boş "backrooms" hissinden kaçınmak için
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0x33232a, roughness: 0.85, metalness: 0.04 });
     const floorTex = makeFloorTexture();
     floorTex.repeat.set(wallLen / 2, wallLen / 2);
     const floorMat = new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.85 });
-    const ceilMat = new THREE.MeshStandardMaterial({ color: 0x070f1a, roughness: 1 });
+    const ceilMat = new THREE.MeshStandardMaterial({ color: 0x241a1f, roughness: 1 });
 
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(wallLen, wallLen), floorMat);
     floor.rotation.x = -Math.PI / 2;
@@ -143,13 +149,44 @@
     west.rotation.y = Math.PI / 2;
     group.add(west);
 
-    // Zemin ayracı — altın şerit
-    const stripeGeo = new THREE.BoxGeometry(wallLen - 0.4, 0.02, 0.08);
-    const stripeMat = new THREE.MeshStandardMaterial({ color: 0xc9a84c, roughness: 0.4, metalness: 0.6 });
-    [-state.roomHalfDepth + 0.5, state.roomHalfDepth - 0.5].forEach(z => {
-      const s = new THREE.Mesh(stripeGeo, stripeMat);
-      s.position.set(0, 0.01, z);
-      group.add(s);
+    // Süpürgelik — dört duvarın dibinde altın şerit, odayı "oturmuş" ve bakımlı gösterir
+    const baseMat = new THREE.MeshStandardMaterial({ color: 0xc9a84c, roughness: 0.4, metalness: 0.6 });
+    const baseHeight = 0.12;
+    const baseGeoNS = new THREE.BoxGeometry(wallLen - 0.1, baseHeight, 0.06);
+    const baseGeoEW = new THREE.BoxGeometry(wallLen - 0.1, baseHeight, 0.06);
+
+    const baseN = new THREE.Mesh(baseGeoNS, baseMat);
+    baseN.position.set(0, baseHeight / 2, -state.roomHalfDepth + 0.03);
+    group.add(baseN);
+
+    const baseS = new THREE.Mesh(baseGeoNS, baseMat);
+    baseS.position.set(0, baseHeight / 2, state.roomHalfDepth - 0.03);
+    group.add(baseS);
+
+    const baseE = new THREE.Mesh(baseGeoEW, baseMat);
+    baseE.rotation.y = Math.PI / 2;
+    baseE.position.set(state.roomHalfWidth - 0.03, baseHeight / 2, 0);
+    group.add(baseE);
+
+    const baseW = new THREE.Mesh(baseGeoEW, baseMat);
+    baseW.rotation.y = Math.PI / 2;
+    baseW.position.set(-state.roomHalfWidth + 0.03, baseHeight / 2, 0);
+    group.add(baseW);
+
+    // Sıcak "spot" ışıkları — her duvara bir tane, tavana yakın. Düz/steril
+    // görünümü kırıp gerçek bir galeri gibi sıcak ışık havuzları oluşturur.
+    const spotColor = 0xffdcae;
+    const spotRange = wallLen * 0.9;
+    const spotPositions = [
+      [0, state.wallHeight - 0.4, -state.roomHalfDepth + 1.5],
+      [0, state.wallHeight - 0.4, state.roomHalfDepth - 1.5],
+      [state.roomHalfWidth - 1.5, state.wallHeight - 0.4, 0],
+      [-state.roomHalfWidth + 1.5, state.wallHeight - 0.4, 0]
+    ];
+    spotPositions.forEach(p => {
+      const light = new THREE.PointLight(spotColor, 1.1, spotRange, 2);
+      light.position.set(p[0], p[1], p[2]);
+      group.add(light);
     });
 
     return group;
@@ -218,10 +255,13 @@
         frameGroup.add(frameBorder);
 
         const plaqueTex = makePlaqueTexture(img.title || null, img.artist || null);
-        const plaqueMat = new THREE.MeshBasicMaterial({ map: plaqueTex });
-        const plaque = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.22), plaqueMat);
-        plaque.position.set(0, -1.35, 0.05);
-        frameGroup.add(plaque);
+        let plaque = null;
+        if (plaqueTex) {
+          const plaqueMat = new THREE.MeshBasicMaterial({ map: plaqueTex });
+          plaque = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.22), plaqueMat);
+          plaque.position.set(0, -1.35, 0.05);
+          frameGroup.add(plaque);
+        }
 
         frameGroup.userData.imgData = img;
         frameGroup.userData.canvasMesh = canvasMesh;
@@ -244,7 +284,7 @@
 
           frameBorder.geometry.dispose();
           frameBorder.geometry = new THREE.BoxGeometry(w + frameThick * 2, h + frameThick * 2, frameDepth);
-          plaque.position.y = -(h / 2) - 0.3;
+          if (plaque) plaque.position.y = -(h / 2) - 0.3;
         });
       }
     }
@@ -254,7 +294,10 @@
 
   function setupScene(container) {
     scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0x070f1a, 8, 22);
+    // Daha uzak ve daha aydınlık sis — davetkâr bir salon hissi, ürkütücü karanlık boşluk değil
+    const fogColor = 0x241a1f;
+    scene.fog = new THREE.Fog(fogColor, 16, 34);
+    scene.background = new THREE.Color(fogColor);
 
     camera = new THREE.PerspectiveCamera(70, container.clientWidth / container.clientHeight, 0.1, 100);
     camera.position.set(0, 1.65, 0);
@@ -265,12 +308,14 @@
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(renderer.domElement);
 
-    const ambient = new THREE.AmbientLight(0xffffff, 0.55);
+    // Parlak, sıcak genel aydınlatma — flat/steril "backrooms" hissi yerine
+    // rahat, gerçek bir müze salonu izlenimi
+    const ambient = new THREE.AmbientLight(0xfff1de, 0.95);
     scene.add(ambient);
-    const dir = new THREE.DirectionalLight(0xfff4e0, 0.7);
+    const dir = new THREE.DirectionalLight(0xfff0d0, 0.85);
     dir.position.set(4, 8, 4);
     scene.add(dir);
-    const dir2 = new THREE.DirectionalLight(0xcfe8ff, 0.35);
+    const dir2 = new THREE.DirectionalLight(0xffe8cc, 0.45);
     dir2.position.set(-4, 6, -4);
     scene.add(dir2);
 
@@ -372,10 +417,10 @@
 
     if (state.isMobile) {
       moveX = state.joystick.dx;
-      moveZ = state.joystick.dy;
+      moveZ = -state.joystick.dy; // joystick yukarı = ileri
     } else {
-      if (state.keys['KeyW'] || state.keys['ArrowUp'])    moveZ -= 1;
-      if (state.keys['KeyS'] || state.keys['ArrowDown'])  moveZ += 1;
+      if (state.keys['KeyW'] || state.keys['ArrowUp'])    moveZ += 1;
+      if (state.keys['KeyS'] || state.keys['ArrowDown'])  moveZ -= 1;
       if (state.keys['KeyA'] || state.keys['ArrowLeft'])  moveX -= 1;
       if (state.keys['KeyD'] || state.keys['ArrowRight']) moveX += 1;
       const len = Math.hypot(moveX, moveZ);
