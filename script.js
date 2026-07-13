@@ -185,7 +185,7 @@ async function showGallery(exhibition) {
   }
 
   btn3d.classList.remove('hidden');
-  btn3d.onclick = () => open3DGallery(images, exhibition.name);
+  btn3d.onclick = () => open3DGallery(images, exhibition.name, exhibition.description);
 
   images.forEach((img, i) => {
     const el = document.createElement('div');
@@ -313,14 +313,14 @@ function loadGallery3DScript() {
   return gallery3DLoading;
 }
 
-async function open3DGallery(images, exhibitionName) {
+async function open3DGallery(images, exhibitionName, exhibitionDescription) {
   const btn = document.getElementById('btn-3d');
   const originalText = btn.textContent;
   btn.disabled = true;
   btn.textContent = 'Yükleniyor…';
   try {
     await loadGallery3DScript();
-    window.openGallery3D(images, exhibitionName);
+    window.openGallery3D(images, exhibitionName, exhibitionDescription);
   } catch (err) {
     alert('3D salon yüklenemedi. İnternet bağlantınızı kontrol edip tekrar deneyin.');
   } finally {
@@ -331,18 +331,6 @@ async function open3DGallery(images, exhibitionName) {
 
 document.getElementById('gal3d-close').addEventListener('click', () => {
   window.closeGallery3D?.();
-});
-
-document.getElementById('gal3d-card-close').addEventListener('click', () => {
-  window.gallery3DExitFocus?.();
-});
-
-document.getElementById('gal3d-card-prev').addEventListener('click', () => {
-  window.gallery3DPrev?.();
-});
-
-document.getElementById('gal3d-card-next').addEventListener('click', () => {
-  window.gallery3DNext?.();
 });
 
 /* ─── EMBED MODU ─────────────────────────────────────────── */

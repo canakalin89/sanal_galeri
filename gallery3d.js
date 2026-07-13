@@ -14,8 +14,6 @@
     active: false,
     images: [],
     frames: [],           // { mesh, img, plaqueGroup }
-    walkTarget: null,      // eser durağı animasyonu için hedef pozisyon/yön
-    focusFrame: null,
     keys: {},
     yaw: 0,
     pitch: 0,
@@ -425,6 +423,112 @@
     }
   }
 
+  /* ─── KARŞILAMA PANOSU (okul logosu + sergi bilgisi) ────── */
+
+  function loadImageElement(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
+    });
+  }
+
+  function wrapText(ctx, text, maxWidth, maxLines) {
+    const words = text.split(/\s+/);
+    const lines = [];
+    let line = '';
+    for (const word of words) {
+      const test = line ? line + ' ' + word : word;
+      if (ctx.measureText(test).width > maxWidth && line) {
+        lines.push(line);
+        line = word;
+        if (lines.length >= maxLines) break;
+      } else {
+        line = test;
+      }
+    }
+    if (line && lines.length < maxLines) lines.push(line);
+    return lines;
+  }
+
+  async function addWelcomeSign(roomGroup, schoolName, exhibitionName, description) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024;
+    canvas.height = 384;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#f6f2e8';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = '#c9a84c';
+    ctx.lineWidth = 6;
+    ctx.strokeRect(6, 6, canvas.width - 12, canvas.height - 12);
+
+    let logoImg = null;
+    try { logoImg = await loadImageElement('/assets/logo.png'); } catch (e) { /* logo olmadan devam */ }
+
+    const padding = 44;
+    const logoSize = 220;
+    let textX = padding;
+
+    if (logoImg) {
+      const lx = padding, ly = (canvas.height - logoSize) / 2;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(lx + logoSize / 2, ly + logoSize / 2, logoSize / 2, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(logoImg, lx, ly, logoSize, logoSize);
+      ctx.restore();
+      ctx.strokeStyle = '#c9a84c';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(lx + logoSize / 2, ly + logoSize / 2, logoSize / 2, 0, Math.PI * 2);
+      ctx.stroke();
+      textX = lx + logoSize + 44;
+    }
+
+    const textWidth = canvas.width - textX - padding;
+    ctx.textAlign = 'left';
+
+    ctx.fillStyle = '#8c8474';
+    ctx.font = '600 26px Georgia, serif';
+    ctx.fillText(truncateText(ctx, (schoolName || '').toUpperCase(), textWidth), textX, 68);
+
+    ctx.fillStyle = '#1a1711';
+    ctx.font = '700 50px Georgia, serif';
+    ctx.fillText(truncateText(ctx, exhibitionName || 'Sanal Sergi', textWidth), textX, 128);
+
+    if (description) {
+      ctx.font = '23px Georgia, serif';
+      ctx.fillStyle = '#4a4438';
+      const lines = wrapText(ctx, description, textWidth, 5);
+      lines.forEach((line, i) => ctx.fillText(line, textX, 172 + i * 32));
+    }
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const mat = new THREE.MeshBasicMaterial({ map: tex });
+
+    const signWidth = Math.min(state.roomHalfWidth * 2 - 1.6, 7.5);
+    const signHeight = signWidth * (canvas.height / canvas.width);
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(signWidth, signHeight), mat);
+
+    // Güney duvarına (başlangıç noktasının arkasına) asılır — dönüp bakınca görülür,
+    // eser çerçeveleriyle çakışmaması için göz hizasının biraz üstüne yerleştirilir
+    const y = Math.min(3.1, state.wallHeight - signHeight / 2 - 0.35);
+    mesh.position.set(0, y, state.roomHalfDepth - 0.10);
+    mesh.rotation.y = Math.PI;
+    roomGroup.add(mesh);
+
+    const frameMat = new THREE.MeshStandardMaterial({ color: 0xc9a84c, roughness: 0.35, metalness: 0.55 });
+    const frameBorder = new THREE.Mesh(
+      new THREE.BoxGeometry(signWidth + 0.18, signHeight + 0.18, 0.05),
+      frameMat
+    );
+    frameBorder.position.set(0, y, state.roomHalfDepth - 0.04);
+    roomGroup.add(frameBorder);
+  }
+
   /* ─── SAHNE KURULUMU ─────────────────────────────────────── */
 
   function setupScene(container) {
@@ -468,7 +572,7 @@
 
   function setupDesktopControls(container) {
     container.addEventListener('click', () => {
-      if (!state.focusFrame) container.requestPointerLock?.();
+      container.requestPointerLock?.();
     });
 
     document.addEventListener('mousemove', e => {
@@ -542,11 +646,9 @@
     });
   }
 
-  /* ─── HAREKET / RAYCAST ─────────────────────────────────── */
+  /* ─── HAREKET ────────────────────────────────────────────── */
 
   function updateMovement(dt) {
-    if (state.focusFrame) return; // odaklanmışken serbest hareket yok
-
     const speed = 3.2;
     let moveX = 0, moveZ = 0;
 
@@ -580,84 +682,6 @@
     camera.rotation.y = state.yaw;
     camera.rotation.x = state.pitch;
     camera.position.y = 1.65;
-  }
-
-  function updateFocusAnimation(dt) {
-    if (!state.walkTarget) return;
-    const t = state.walkTarget;
-    camera.position.lerp(t.pos, Math.min(1, dt * 3.5));
-    const dist = camera.position.distanceTo(t.pos);
-    if (dist < 0.05) {
-      camera.position.copy(t.pos);
-      state.walkTarget = null;
-      showArtworkCard(state.focusFrame.userData.imgData);
-    }
-    // Bakış yönünü hedefe çevir
-    const lookDir = t.lookAt.clone().sub(camera.position).normalize();
-    const targetYaw = Math.atan2(lookDir.x, lookDir.z);
-    state.yaw += (angleDiff(targetYaw, state.yaw)) * Math.min(1, dt * 4);
-    state.pitch += (0 - state.pitch) * Math.min(1, dt * 4);
-  }
-
-  function angleDiff(a, b) {
-    let d = a - b;
-    while (d > Math.PI) d -= Math.PI * 2;
-    while (d < -Math.PI) d += Math.PI * 2;
-    return d;
-  }
-
-  function focusOnFrame(frame) {
-    state.focusFrame = frame;
-    const normal = frame.userData.normal.clone();
-    const targetPos = frame.position.clone().addScaledVector(normal, 2.2);
-    targetPos.y = 1.65;
-    state.walkTarget = { pos: targetPos, lookAt: frame.position.clone() };
-    hideArtworkCard();
-  }
-
-  function exitFocus() {
-    state.focusFrame = null;
-    state.walkTarget = null;
-    hideArtworkCard();
-  }
-
-  function raycastClick(container, clientX, clientY) {
-    const rect = container.getBoundingClientRect();
-    const mouse = new THREE.Vector2(
-      ((clientX - rect.left) / rect.width) * 2 - 1,
-      -((clientY - rect.top) / rect.height) * 2 + 1
-    );
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(mouse, camera);
-    const meshes = state.frames.map(f => f.userData.canvasMesh);
-    const hits = raycaster.intersectObjects(meshes, false);
-    if (hits.length > 0) {
-      const frame = state.frames.find(f => f.userData.canvasMesh === hits[0].object);
-      if (frame) focusOnFrame(frame);
-    }
-  }
-
-  function focusAdjacentFrame(delta) {
-    if (!state.focusFrame || state.frames.length === 0) return;
-    const idx = state.frames.indexOf(state.focusFrame);
-    if (idx === -1) return;
-    const nextIdx = (idx + delta + state.frames.length) % state.frames.length;
-    focusOnFrame(state.frames[nextIdx]);
-  }
-
-  /* ─── ESER BİLGİ KARTI ───────────────────────────────────── */
-
-  function showArtworkCard(img) {
-    const card = el('gal3d-card');
-    if (!card) return;
-    el('gal3d-card-title').textContent = img.title || '';
-    el('gal3d-card-caption').textContent = img.caption || '';
-    el('gal3d-card-artist').textContent = img.artist || '';
-    card.classList.remove('hidden');
-  }
-
-  function hideArtworkCard() {
-    el('gal3d-card')?.classList.add('hidden');
   }
 
   /* ─── MİNİ HARİTA ────────────────────────────────────────── */
@@ -715,7 +739,6 @@
   function animate() {
     raf = requestAnimationFrame(animate);
     const dt = Math.min(0.05, clock.getDelta());
-    updateFocusAnimation(dt);
     updateMovement(dt);
     renderer.render(scene, camera);
 
@@ -725,7 +748,7 @@
 
   /* ─── AÇILIŞ / KAPANIŞ ───────────────────────────────────── */
 
-  async function openGallery3D(images, exhibitionName) {
+  async function openGallery3D(images, exhibitionName, exhibitionDescription) {
     if (state.active) return;
     if (!images || images.length === 0) return;
 
@@ -754,52 +777,30 @@
     state.yaw = 0;
     state.pitch = 0;
     state.keys = {};
-    state.focusFrame = null;
-    state.walkTarget = null;
     state.isMobile = isMobileDevice();
 
     el('gal3d-joystick').classList.toggle('hidden', !state.isMobile);
     // Kontrol ipucu artık kalıcı bir HUD — otomatik kaybolmuyor
     el('gal3d-hint').innerHTML = state.isMobile
-      ? '<strong>Yürü:</strong> Sol çubuk &nbsp; <strong>Bak:</strong> Sürükle &nbsp; <strong>Seç:</strong> Dokun'
-      : '<strong>Yürü:</strong> WASD / Ok tuşları &nbsp; <strong>Bak:</strong> Tıkla + Fare &nbsp; <strong>Seç:</strong> Tıkla &nbsp; <strong>Çık:</strong> ESC';
+      ? '<strong>Yürü:</strong> Sol çubuk &nbsp; <strong>Bak:</strong> Ekranı sürükle'
+      : '<strong>Yürü:</strong> WASD / Ok tuşları &nbsp; <strong>Bak:</strong> Tıkla + Fare &nbsp; <strong>Çık:</strong> ESC';
     el('gal3d-hint').classList.remove('hidden');
     el('gal3d-minimap-wrap').classList.remove('hidden');
+    const schoolName = typeof SCHOOL_NAME !== 'undefined' ? SCHOOL_NAME : 'Sanal Sergi';
     const badgeSchool = el('gal3d-badge-school');
-    if (badgeSchool) badgeSchool.textContent = typeof SCHOOL_NAME !== 'undefined' ? SCHOOL_NAME : 'Sanal Sergi';
+    if (badgeSchool) badgeSchool.textContent = schoolName;
 
     setupScene(container);
     const room = buildRoom(images.length);
     scene.add(room);
     await placeArtworks(room, images);
+    await addWelcomeSign(room, schoolName, exhibitionName, exhibitionDescription);
 
     if (state.isMobile) {
       setupMobileControls(container);
     } else {
       setupDesktopControls(container);
     }
-
-    container.addEventListener('click', e => {
-      if (state.isMobile) return;
-      if (document.pointerLockElement === container) raycastClick(container, window.innerWidth / 2, window.innerHeight / 2);
-    });
-
-    container.addEventListener('touchend', e => {
-      if (!state.isMobile) return;
-      if (state.lookTouch.active === false && e.changedTouches.length) {
-        // basit tap algısı: sürükleme olmadıysa tıklama say
-      }
-    });
-    // Mobilde eser seçimi: kısa dokunuşta merkez raycast
-    let touchStartTime = 0, touchMoved = false;
-    container.addEventListener('touchstart', () => { touchStartTime = Date.now(); touchMoved = false; }, { passive: true });
-    container.addEventListener('touchmove', () => { touchMoved = true; }, { passive: true });
-    container.addEventListener('touchend', e => {
-      if (!state.isMobile || touchMoved || Date.now() - touchStartTime > 300) return;
-      const t = e.changedTouches[0];
-      if (el('gal3d-joy-base').contains(t.target)) return;
-      raycastClick(container, t.clientX, t.clientY);
-    });
 
     window.addEventListener('resize', () => onResize(container));
     window.addEventListener('keydown', escListener);
@@ -810,13 +811,7 @@
   }
 
   function escListener(e) {
-    if (e.code === 'Escape') {
-      if (state.focusFrame) {
-        exitFocus();
-      } else {
-        closeGallery3D();
-      }
-    }
+    if (e.code === 'Escape') closeGallery3D();
   }
 
   function closeGallery3D() {
@@ -833,7 +828,6 @@
     }
     scene = null; camera = null; renderer = null;
     state.frames = [];
-    hideArtworkCard();
 
     el('gal3d-overlay').classList.add('hidden');
     document.body.style.overflow = '';
@@ -841,7 +835,4 @@
 
   window.openGallery3D = openGallery3D;
   window.closeGallery3D = closeGallery3D;
-  window.gallery3DExitFocus = exitFocus;
-  window.gallery3DNext = () => focusAdjacentFrame(1);
-  window.gallery3DPrev = () => focusAdjacentFrame(-1);
 })();
