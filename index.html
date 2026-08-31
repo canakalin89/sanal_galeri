@@ -23,15 +23,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 
-  <!-- 3D salon (gallery3d.js) için: GLTFLoader/DRACOLoader 'three' paketini
-       bare specifier ile import ediyor, bunu yerel kopyamıza yönlendiriyoruz -->
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "/vendor/three.module.js"
-    }
-  }
-  </script>
 </head>
 <body>
 
@@ -115,24 +106,33 @@
       <p>Salon hazırlanıyor…</p>
     </div>
 
-    <!-- Sol üst: okul rozeti -->
+    <div class="gal3d-topbar">
     <div class="gal3d-badge">
       <img src="/assets/logo.png" alt="" />
       <div class="gal3d-badge-text">
         <span id="gal3d-badge-school"></span>
-        <span class="gal3d-badge-sub">Sanal Sergi</span>
+        <span class="gal3d-badge-sub" id="gal3d-exhibition-name"></span>
       </div>
     </div>
 
-    <!-- Sağ üst: çıkış -->
+    <div class="gal3d-room-nav hidden" id="gal3d-room-nav">
+      <button id="gal3d-room-prev" type="button" aria-label="Önceki salon">‹</button>
+      <div>
+        <label class="sr-only" for="gal3d-room-select">Salon seç</label>
+        <select id="gal3d-room-select"></select>
+        <span id="gal3d-room-status" role="status" aria-live="polite"></span>
+      </div>
+      <button id="gal3d-room-next" type="button" aria-label="Sonraki salon">›</button>
+    </div>
     <button class="gal3d-close" id="gal3d-close" aria-label="2D galeriye dön">
       <span>&#8592;</span> 2D Galeriye Dön
     </button>
+    </div>
 
     <!-- Sol alt: kontrol rehberi (kalıcı) -->
     <div class="gal3d-hint hidden" id="gal3d-hint"></div>
     <div class="gal3d-artwork-picker hidden" id="gal3d-artwork-picker">
-      <label for="gal3d-artwork-select">Eser seç</label>
+      <label for="gal3d-artwork-select">Bu salondaki eser</label>
       <select id="gal3d-artwork-select"></select>
       <button id="gal3d-inspect" type="button">İncele</button>
     </div>

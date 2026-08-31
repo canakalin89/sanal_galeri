@@ -55,7 +55,7 @@
     keys: {},
     yaw: 0,
     pitch: 0,
-    velocity: null,        // THREE.Vector3, THREE yüklendikten sonra ayarlanır
+    roomIndex: 0,
     isMobile: false,
     joystick: { active: false, startX: 0, startY: 0, dx: 0, dy: 0 },
     lookTouch: { active: false, lastX: 0, lastY: 0 },
@@ -76,868 +76,142 @@
 
   function el(id) { return document.getElementById(id); }
 
-  /* ─── DOKU YARDIMCILARI ──────────────────────────────────── */
-
-  function makePlaqueTexture(title, sub) {
-    if (!title && !sub) return null; // ikisi de yoksa plaket hiç oluşturulmaz
-
+  function labelTexture(title, subtitle) {
     const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 128;
+    canvas.width = 768; canvas.height = 160;
     const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#f0ede2';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.strokeStyle = '#c9a84c';
-    ctx.lineWidth = 4;
-    ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
-    ctx.textAlign = 'center';
-
-    if (title) {
-      ctx.font = '600 34px Georgia, serif';
-      ctx.fillStyle = '#1a1711';
-      ctx.fillText(truncateText(ctx, title, canvas.width - 40), canvas.width / 2, sub ? 56 : 74);
-    }
-    if (sub) {
-      ctx.font = 'italic 24px Georgia, serif';
-      ctx.fillStyle = '#6b6358';
-      ctx.fillText(truncateText(ctx, sub, canvas.width - 40), canvas.width / 2, title ? 96 : 74);
-    }
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    return tex;
+    ctx.fillStyle = '#edece7'; ctx.fillRect(0, 0, 768, 160);
+    ctx.fillStyle = '#303a3c'; ctx.font = '500 32px sans-serif';
+    ctx.fillText(title, 24, 60, 720);
+    ctx.fillStyle = '#687773'; ctx.font = '25px sans-serif';
+    ctx.fillText(subtitle, 24, 113, 720);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
   }
 
-  function truncateText(ctx, text, maxWidth) {
-    if (ctx.measureText(text).width <= maxWidth) return text;
-    let t = text;
-    while (t.length > 3 && ctx.measureText(t + '…').width > maxWidth) {
-      t = t.slice(0, -1);
-    }
-    return t + '…';
-  }
-
-  function makeFloorTexture() {
-    const size = 256;
-    const canvas = document.createElement('canvas');
-    canvas.width = size; canvas.height = size;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#2a1e14';
-    ctx.fillRect(0, 0, size, size);
-    const plank = size / 8;
-    for (let y = 0; y < 8; y++) {
-      for (let x = 0; x < 8; x++) {
-        const shade = 18 + ((x + y * 3) % 5) * 4;
-        ctx.fillStyle = `rgb(${shade + 24}, ${shade + 14}, ${shade + 6})`;
-        ctx.fillRect(x * plank, y * plank, plank - 1, plank - 1);
-      }
-    }
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.colorSpace = THREE.SRGBColorSpace;
-    return tex;
-  }
-
-  function makeRugTexture() {
-    const size = 512;
-    const canvas = document.createElement('canvas');
-    canvas.width = size; canvas.height = size;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#4a1f28';
-    ctx.fillRect(0, 0, size, size);
-    ctx.strokeStyle = '#c9a84c';
-    ctx.lineWidth = 10;
-    ctx.strokeRect(20, 20, size - 40, size - 40);
-    ctx.lineWidth = 3;
-    ctx.strokeRect(48, 48, size - 96, size - 96);
-    ctx.fillStyle = '#c9a84c';
-    [[48, 48], [size - 48, 48], [48, size - 48], [size - 48, size - 48]].forEach(([x, y]) => {
-      ctx.beginPath();
-      ctx.arc(x, y, 9, 0, Math.PI * 2);
-      ctx.fill();
-    });
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    return tex;
-  }
-
-  /* ─── SALON ÜRETİMİ ──────────────────────────────────────── */
-
-  function buildRoom(count) {
-    // Eserler artık 4 duvara eşit dağıtılıyor (karşılama panosu artık ayrı,
-    // serbest duran bir bölmede — güney duvarı da eserlere açık).
-    // Daha kompakt bir salon için oda boyutu daha sıkı hesaplanıyor.
-    const perWallEstimate = Math.max(1, Math.ceil(count / 4));
-    const wallLen = Math.max(8, perWallEstimate * 2.7 + 2.2);
-    state.roomHalfWidth = wallLen / 2;
-    state.roomHalfDepth = wallLen / 2;
-
-    const group = new THREE.Group();
-
-    // Sıcak, aydınlık müze duvarı (krem/bej) — gerçek bir sanat galerisi izlenimi,
-    // "backrooms" hissi veren koyu/soğuk tonlardan kaçınıyoruz
-    const wallMat = new THREE.MeshStandardMaterial({ color: 0xede6d8, roughness: 0.92, metalness: 0.0 });
-    const floorTex = makeFloorTexture();
-    floorTex.repeat.set(wallLen / 2, wallLen / 2);
-    const floorMat = new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.85 });
-    const ceilMat = new THREE.MeshStandardMaterial({ color: 0xdcd3c0, roughness: 1 });
-
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(wallLen, wallLen), floorMat);
-    floor.rotation.x = -Math.PI / 2;
-    floor.receiveShadow = true;
-    group.add(floor);
-
-    const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(wallLen, wallLen), ceilMat);
-    ceiling.rotation.x = Math.PI / 2;
-    ceiling.position.y = state.wallHeight;
-    ceiling.receiveShadow = true;
-    group.add(ceiling);
-
-    // Ahşap tavan kirişleri — düz tavanı kırıp gerçek bir galeri mimarisi hissi verir
-    const beamMat = new THREE.MeshStandardMaterial({ color: 0x4a3324, roughness: 0.8 });
-    const beamCount = Math.max(3, Math.round(wallLen / 2.4));
-    const beamSpacing = wallLen / (beamCount + 1);
-    for (let i = 1; i <= beamCount; i++) {
-      const beam = new THREE.Mesh(new THREE.BoxGeometry(wallLen, 0.22, 0.28), beamMat);
-      beam.position.set(0, state.wallHeight - 0.11, -state.roomHalfDepth + beamSpacing * i);
-      group.add(beam);
-    }
-
-    // Aydınlatma rayı görünümü — her kiriş boyunca küçük sıcak nokta lambalar
-    const trackMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5, metalness: 0.6 });
-    for (let i = 1; i <= beamCount; i++) {
-      const fixture = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.08, 0.08), trackMat);
-      fixture.position.set(0, state.wallHeight - 0.32, -state.roomHalfDepth + beamSpacing * i);
-      group.add(fixture);
-    }
-
-    const wallGeoNS = new THREE.PlaneGeometry(wallLen, state.wallHeight);
-    const wallGeoEW = new THREE.PlaneGeometry(wallLen, state.wallHeight);
-
-    const north = new THREE.Mesh(wallGeoNS, wallMat);
-    north.position.set(0, state.wallHeight / 2, -state.roomHalfDepth);
-    north.receiveShadow = true;
-    group.add(north);
-
-    const south = new THREE.Mesh(wallGeoNS, wallMat);
-    south.position.set(0, state.wallHeight / 2, state.roomHalfDepth);
-    south.rotation.y = Math.PI;
-    south.receiveShadow = true;
-    group.add(south);
-
-    const east = new THREE.Mesh(wallGeoEW, wallMat);
-    east.position.set(state.roomHalfWidth, state.wallHeight / 2, 0);
-    east.rotation.y = -Math.PI / 2;
-    east.receiveShadow = true;
-    group.add(east);
-
-    const west = new THREE.Mesh(wallGeoEW, wallMat);
-    west.position.set(-state.roomHalfWidth, state.wallHeight / 2, 0);
-    west.rotation.y = Math.PI / 2;
-    west.receiveShadow = true;
-    group.add(west);
-
-    // Süpürgelik — dört duvarın dibinde altın şerit, odayı "oturmuş" ve bakımlı gösterir
-    const baseMat = new THREE.MeshStandardMaterial({ color: 0xc9a84c, roughness: 0.4, metalness: 0.6 });
-    const baseHeight = 0.12;
-    const baseGeoNS = new THREE.BoxGeometry(wallLen - 0.1, baseHeight, 0.06);
-    const baseGeoEW = new THREE.BoxGeometry(wallLen - 0.1, baseHeight, 0.06);
-
-    const baseN = new THREE.Mesh(baseGeoNS, baseMat);
-    baseN.position.set(0, baseHeight / 2, -state.roomHalfDepth + 0.03);
-    group.add(baseN);
-
-    const baseS = new THREE.Mesh(baseGeoNS, baseMat);
-    baseS.position.set(0, baseHeight / 2, state.roomHalfDepth - 0.03);
-    group.add(baseS);
-
-    const baseE = new THREE.Mesh(baseGeoEW, baseMat);
-    baseE.rotation.y = Math.PI / 2;
-    baseE.position.set(state.roomHalfWidth - 0.03, baseHeight / 2, 0);
-    group.add(baseE);
-
-    const baseW = new THREE.Mesh(baseGeoEW, baseMat);
-    baseW.rotation.y = Math.PI / 2;
-    baseW.position.set(-state.roomHalfWidth + 0.03, baseHeight / 2, 0);
-    group.add(baseW);
-
-    // Tavan pervazı — süpürgeliğin eşi, tepede. Kutu gibi düz bir oda hissini kırar.
-    const crownHeight = 0.1;
-    const crownY = state.wallHeight - crownHeight / 2 - 0.02;
-    const crownGeoNS = new THREE.BoxGeometry(wallLen - 0.1, crownHeight, 0.06);
-    const crownGeoEW = new THREE.BoxGeometry(wallLen - 0.1, crownHeight, 0.06);
-
-    const crownN = new THREE.Mesh(crownGeoNS, baseMat);
-    crownN.position.set(0, crownY, -state.roomHalfDepth + 0.03);
-    group.add(crownN);
-
-    const crownS = new THREE.Mesh(crownGeoNS, baseMat);
-    crownS.position.set(0, crownY, state.roomHalfDepth - 0.03);
-    group.add(crownS);
-
-    const crownE = new THREE.Mesh(crownGeoEW, baseMat);
-    crownE.rotation.y = Math.PI / 2;
-    crownE.position.set(state.roomHalfWidth - 0.03, crownY, 0);
-    group.add(crownE);
-
-    const crownW = new THREE.Mesh(crownGeoEW, baseMat);
-    crownW.rotation.y = Math.PI / 2;
-    crownW.position.set(-state.roomHalfWidth + 0.03, crownY, 0);
-    group.add(crownW);
-
-    // Köşe pilastırları — dört köşeye ince altın dikey şerit, düz kutu hissini kırar
-    const pilasterMat = new THREE.MeshStandardMaterial({ color: 0xc9a84c, roughness: 0.4, metalness: 0.55 });
-    const pilasterGeo = new THREE.BoxGeometry(0.1, state.wallHeight - 0.1, 0.1);
-    const cornerOffset = 0.35;
-    [
-      [state.roomHalfWidth - cornerOffset, -state.roomHalfDepth + cornerOffset],
-      [state.roomHalfWidth - cornerOffset, state.roomHalfDepth - cornerOffset],
-      [-state.roomHalfWidth + cornerOffset, -state.roomHalfDepth + cornerOffset],
-      [-state.roomHalfWidth + cornerOffset, state.roomHalfDepth - cornerOffset]
-    ].forEach(([x, z]) => {
-      const p = new THREE.Mesh(pilasterGeo, pilasterMat);
-      p.position.set(x, state.wallHeight / 2, z);
-      group.add(p);
-    });
-
-    // Zemin halısı — merkeze sıcaklık ve odak noktası katar, boş/kutu hissini azaltır
-    const rugTex = makeRugTexture();
-    const rugMat = new THREE.MeshStandardMaterial({ map: rugTex, roughness: 0.95 });
-    const rugSize = Math.max(4, Math.min(wallLen * 0.55, wallLen - 3));
-    const rug = new THREE.Mesh(new THREE.PlaneGeometry(rugSize, rugSize), rugMat);
-    rug.rotation.x = -Math.PI / 2;
-    rug.position.y = 0.008;
-    group.add(rug);
-
-    // Seyir bankı — halının üzerinde, gerçek bir galeri mobilyası
-    const benchWoodMat = new THREE.MeshStandardMaterial({ color: 0x2a1e14, roughness: 0.6 });
-    const benchPadMat = new THREE.MeshStandardMaterial({ color: 0x3a2a30, roughness: 0.85 });
-    const benchGroup = new THREE.Group();
-    const benchPad = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.12, 0.55), benchPadMat);
-    benchPad.position.y = 0.42;
-    benchPad.castShadow = true;
-    benchPad.receiveShadow = true;
-    benchGroup.add(benchPad);
-    [[-0.65, -0.2], [0.65, -0.2], [-0.65, 0.2], [0.65, 0.2]].forEach(([x, z]) => {
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.4, 0.08), benchWoodMat);
-      leg.position.set(x, 0.2, z);
-      leg.castShadow = true;
-      benchGroup.add(leg);
-    });
-    benchGroup.position.set(0, 0, -1.8); // kamera başlangıç noktasının önünde, kuzey duvarına bakar
-    benchGroup.userData.isProceduralFallback = 'bench';
-    group.add(benchGroup);
-
-    // Saksılar — köşelere sıcaklık katan basit prosedürel bitkiler
-    function makePlant() {
-      const plantGroup = new THREE.Group();
-      const potMat = new THREE.MeshStandardMaterial({ color: 0x5a4a3a, roughness: 0.8 });
-      const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.16, 0.32, 12), potMat);
-      pot.position.y = 0.16;
-      pot.castShadow = true;
-      pot.receiveShadow = true;
-      plantGroup.add(pot);
-      const leafMat = new THREE.MeshStandardMaterial({ color: 0x3d6b3f, roughness: 0.7 });
-      for (let i = 0; i < 6; i++) {
-        const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.65, 6), leafMat);
-        const angle = (i / 6) * Math.PI * 2;
-        leaf.position.set(Math.cos(angle) * 0.1, 0.55 + Math.random() * 0.15, Math.sin(angle) * 0.1);
-        leaf.rotation.z = Math.cos(angle) * 0.3;
-        leaf.rotation.x = Math.sin(angle) * 0.3;
-        leaf.castShadow = true;
-        plantGroup.add(leaf);
-      }
-      return plantGroup;
-    }
-    const plantMargin = 1.0;
-    [
-      [state.roomHalfWidth - plantMargin, state.roomHalfDepth - plantMargin],
-      [-state.roomHalfWidth + plantMargin, state.roomHalfDepth - plantMargin],
-      [state.roomHalfWidth - plantMargin, -state.roomHalfDepth + plantMargin],
-      [-state.roomHalfWidth + plantMargin, -state.roomHalfDepth + plantMargin]
-    ].forEach(([x, z]) => {
-      const plant = makePlant();
-      plant.position.set(x, 0, z);
-      plant.userData.isProceduralFallback = 'plant';
-      group.add(plant);
-    });
-
-    // Sıcak "spot" ışıkları — her duvara bir tane, tavana yakın. Düz/steril
-    // görünümü kırıp gerçek bir galeri gibi sıcak ışık havuzları oluşturur.
-    const spotColor = 0xffdcae;
-    const spotRange = wallLen * 0.9;
-    const spotPositions = [
-      [0, state.wallHeight - 0.4, -state.roomHalfDepth + 1.5],
-      [0, state.wallHeight - 0.4, state.roomHalfDepth - 1.5],
-      [state.roomHalfWidth - 1.5, state.wallHeight - 0.4, 0],
-      [-state.roomHalfWidth + 1.5, state.wallHeight - 0.4, 0]
-    ];
-    spotPositions.forEach(p => {
-      const light = new THREE.PointLight(spotColor, 1.1, spotRange, 2);
-      light.position.set(p[0], p[1], p[2]);
-      group.add(light);
-    });
-
-    return group;
-  }
-
-  /* ─── GERÇEK 3D MODELLER (GLTF/GLB) ──────────────────────── */
-  // Prosedürel mobilyaların yerini alır; yüklenemezse sessizce prosedürel
-  // halleri korunur (yedek/fallback).
-
-  async function getGLTFLoader(run) {
-    if (run.loaderPromise) return run.loaderPromise;
-    run.loaderPromise = (async () => {
-      const [{ GLTFLoader }, { DRACOLoader }] = await Promise.all([
-        import('/vendor/loaders/GLTFLoader.js'),
-        import('/vendor/loaders/DRACOLoader.js')
-      ]);
-      if (!isCurrent(run)) throw new Error('Salon kapatıldı');
-      const dracoLoader = new DRACOLoader();
-      run.dracoLoader = dracoLoader;
-      dracoLoader.setDecoderPath('/vendor/draco/');
-      const loader = new GLTFLoader();
-      loader.setDRACOLoader(dracoLoader);
-      return loader;
-    })();
-    return run.loaderPromise;
-  }
-
-  function loadModel(url, run) {
-    run.pendingModels++;
-    return getGLTFLoader(run).then(loader => new Promise((resolve, reject) => {
-      if (!isCurrent(run)) return reject(new Error('Salon kapatıldı'));
-      loader.load(url, gltf => {
-        if (!isCurrent(run)) {
-          disposeObjects([gltf.scene]);
-          reject(new Error('Salon kapatıldı'));
-          return;
-        }
-        // Klonlanmayan model parçaları da kapanışta temizlenir.
-        run.roots.add(gltf.scene);
-        resolve(gltf.scene);
-      }, undefined, reject);
-    })).finally(() => {
-      run.pendingModels--;
-      // Devam eden çözümlemeyi ortasında kesmek bekleyen Promise'leri kilitler.
-      if (!isCurrent(run) && run.pendingModels === 0) run.dracoLoader?.dispose();
-    });
-  }
-
-  // Modeli verilen hedef boyuta göre ölçekler, tabanını y=0'a, merkezini
-  // x/z=0'a oturtur. axis='max' (varsayılan) en büyük ekseni hedefe göre
-  // ölçekler; 'x'/'y'/'z' verilirse yalnızca o eksen hedef boyuta getirilir
-  // (ör. geniş ama alçak bir modelin YÜKSEKLİĞİNİ hedeflemek için).
-  // Ölçeklenmiş boyutu (Vector3) döndürür.
-  function normalizeModel(model, targetSize, axis) {
-    const box = new THREE.Box3().setFromObject(model);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    const refDim = axis === 'x' ? size.x : axis === 'y' ? size.y : axis === 'z' ? size.z
-      : Math.max(size.x, size.y, size.z);
-    model.scale.setScalar(targetSize / (refDim || 1));
-
-    const box2 = new THREE.Box3().setFromObject(model);
-    const center = new THREE.Vector3();
-    box2.getCenter(center);
-    model.position.x -= center.x;
-    model.position.z -= center.z;
-    model.position.y -= box2.min.y;
-
-    const finalSize = new THREE.Vector3();
-    box2.getSize(finalSize);
-    return finalSize;
-  }
-
-  function removeFallback(roomGroup, kind) {
-    roomGroup.children
-      .filter(c => c.userData.isProceduralFallback === kind)
-      .forEach(c => { session.roots.add(c); roomGroup.remove(c); });
-  }
-
-  function applyShadows(model) {
-    model.traverse(child => {
-      if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; }
-    });
-    return model;
-  }
-
-  function enhanceRoomWithRealModels(roomGroup, signInfo, run) {
-    // Seyir bankı
-    loadModel('/vendor/models/bench.glb', run).then(model => {
-      if (!isCurrent(run)) return;
-      normalizeModel(model, 1.7);
-      applyShadows(model);
-      model.position.z += -1.8;
-      removeFallback(roomGroup, 'bench');
-      roomGroup.add(model);
-    }).catch(() => { /* prosedürel bank kalır */ });
-
-    // Saksılı bitki — 4 köşeye aynı modelden klon
-    loadModel('/vendor/models/plant.glb', run).then(model => {
-      if (!isCurrent(run)) return;
-      normalizeModel(model, 1.3);
-      applyShadows(model);
-      removeFallback(roomGroup, 'plant');
-      const margin = 1.0;
-      [
-        [state.roomHalfWidth - margin, state.roomHalfDepth - margin],
-        [-state.roomHalfWidth + margin, state.roomHalfDepth - margin],
-        [state.roomHalfWidth - margin, -state.roomHalfDepth + margin],
-        [-state.roomHalfWidth + margin, -state.roomHalfDepth + margin]
-      ].forEach(([x, z]) => {
-        const clone = model.clone();
-        clone.position.x += x;
-        clone.position.z += z;
-        roomGroup.add(clone);
-      });
-    }).catch(() => { /* prosedürel bitkiler kalır */ });
-
-    // Küçük saksı aksanları — çok-nesneli kümeden (plant_accents.glb) tek tek
-    // seçilip odanın çeşitli noktalarına (duvar diplerine, banka yakın) dağıtılır.
-    loadModel('/vendor/models/plant_accents.glb', run).then(model => {
-      if (!isCurrent(run)) return;
-      const allMeshes = [];
-      model.traverse(child => {
-        if (child.isMesh) allMeshes.push(child);
-      });
-      // Kümede bazı varyantlar kasıtlı olarak "devrilmiş saksı" şeklinde
-      // modellenmiş olabilir (çeşitlilik için) — bunları eleyip yalnızca
-      // dik duran (yükseklik > taban ölçüleri) saksıları seçiyoruz.
-      const pots = allMeshes.filter(mesh => {
-        const box = new THREE.Box3().setFromObject(mesh);
-        const size = new THREE.Vector3();
-        box.getSize(size);
-        return size.y > size.x && size.y > size.z;
-      });
-      if (pots.length === 0) return;
-
-      const margin = 0.55;
-      const spots = [
-        [0, -state.roomHalfDepth + margin],                          // banka yakın (kuzey duvar dibi)
-        [state.roomHalfWidth - margin, 0],                           // doğu duvar orta
-        [-state.roomHalfWidth + margin, 0],                          // batı duvar orta
-        [state.roomHalfWidth - margin, state.roomHalfDepth * 0.5],
-        [-state.roomHalfWidth + margin, state.roomHalfDepth * 0.5],
-        [state.roomHalfWidth - margin, -state.roomHalfDepth * 0.5],
-        [-state.roomHalfWidth + margin, -state.roomHalfDepth * 0.5]
-      ];
-
-      spots.forEach((spot, i) => {
-        const pot = pots[i % pots.length];
-        const clone = pot.clone();
-        clone.geometry = pot.geometry; // geometri paylaşılır, dönüştürülmez
-        const group = new THREE.Group();
-        group.add(clone);
-        normalizeModel(group, 0.6);
-        applyShadows(group);
-        group.rotation.y = Math.random() * Math.PI * 2; // yaprakların "kenardan" görünmesini azaltır
-        group.position.x += spot[0];
-        group.position.z += spot[1];
-        roomGroup.add(group);
-      });
-    }).catch(() => { /* aksan bitkiler olmadan devam */ });
-
-    // Avize — tavan ortasından sarkar. Model tek parça bir avize (kol+gövde),
-    // önceki boyut (1.2m) devasa bir salonda görünmez kalıyordu; ayrıca hiç
-    // ışık kaynağı eklenmemişti — model sadece dekoratifti. Şimdi hem daha
-    // büyük hem de gerçek, sıcak bir nokta ışık kaynağı ile aydınlatıyor.
-    loadModel('/vendor/models/chandelier.glb', run).then(model => {
-      if (!isCurrent(run)) return;
-      const size = normalizeModel(model, 1.9);
-      model.position.y += state.wallHeight - size.y - 0.05;
-      applyShadows(model);
-      roomGroup.add(model);
-
-      const bulbLight = new THREE.PointLight(0xffdca8, 3.2, Math.max(state.roomHalfWidth, state.roomHalfDepth) * 1.8, 1.8);
-      bulbLight.position.set(0, state.wallHeight - size.y * 0.35, 0);
-      bulbLight.castShadow = true;
-      bulbLight.shadow.mapSize.set(1024, 1024);
-      bulbLight.shadow.bias = -0.002;
-      roomGroup.add(bulbLight);
-    }).catch(() => { /* avize olmadan devam */ });
-
-    // Heykel kaidesi — model aslında yan yana dizilmiş 4 ayrı kaideden oluşan
-    // bir küme; tek parça gibi ölçeklenirse her biri cüce kalır. Her kaideyi
-    // kendi başına çıkarıp karşılama panosunun bulunduğu orta bölmenin
-    // (partition) iki yanına ayrı ayrı yerleştiriyoruz.
-    loadModel('/vendor/models/pedestal.glb', run).then(model => {
-      if (!isCurrent(run)) return;
-      const stands = [];
-      model.traverse(child => { if (child.isMesh) stands.push(child); });
-      if (stands.length === 0) return;
-
-      const pz = signInfo ? signInfo.partitionZ : -state.roomHalfDepth + 1.3;
-      const half = Math.min(
-        signInfo ? signInfo.partitionWidth / 2 + 0.7 : state.roomHalfWidth - 1.3,
-        state.roomHalfWidth - 0.6
-      );
-      const spots = [
-        [half, pz],
-        [-half, pz]
-      ];
-      spots.forEach((spot, i) => {
-        const stand = stands[i % stands.length];
-        const clone = stand.clone();
-        clone.geometry = stand.geometry;
-        const group = new THREE.Group();
-        group.add(clone);
-        normalizeModel(group, 0.95, 'y');
-        applyShadows(group);
-        group.position.set(spot[0], 0, spot[1]);
-        roomGroup.add(group);
-      });
-    }).catch(() => { /* podyum olmadan devam */ });
-  }
-
-  /* ─── ESER ÇERÇEVESİ ─────────────────────────────────────── */
-
-  function loadImageTexture(url) {
+  function loadImageTexture(url, signal) {
     return new Promise(resolve => {
-      const loader = new THREE.TextureLoader();
-      loader.crossOrigin = 'anonymous';
-      loader.load(
-        url,
-        tex => { tex.colorSpace = THREE.SRGBColorSpace; resolve(tex); },
-        undefined,
-        () => resolve(null)
-      );
-    });
-  }
-
-  function placeArtworks(roomGroup, images, run) {
-    const wallLen = state.roomHalfWidth * 2;
-    // Eserler artık 4 duvara ROUND-ROBIN dağıtılır (0,1,2,3,0,1,2,3,…) —
-    // hiçbir duvar boş kalmaz ve sayı 4'e bölünmese bile duvarlar arasındaki
-    // fark en fazla 1 eser olur. Karşılama panosu artık ayrı bir bölmede
-    // olduğundan güney duvarı da eserlere açık.
-    const wallDefs = [
-      { normal: [0, 0, 1],  base: [0, 0, -state.roomHalfDepth + 0.05], axis: 'x' },
-      { normal: [-1, 0, 0], base: [state.roomHalfWidth - 0.05, 0, 0],  axis: 'z' },
-      { normal: [0, 0, -1], base: [0, 0, state.roomHalfDepth - 0.05],  axis: 'x', flip: true },
-      { normal: [1, 0, 0],  base: [-state.roomHalfWidth + 0.05, 0, 0], axis: 'z', flip: true }
-    ];
-    const slotsPerWall = Math.max(1, Math.ceil(images.length / wallDefs.length));
-    const spacing = wallLen / (slotsPerWall + 1);
-
-    const texWidth = state.isMobile ? 640 : 1024;
-
-    images.forEach((img, idx) => {
-      const wall = wallDefs[idx % wallDefs.length];
-      const slot = Math.floor(idx / wallDefs.length);
-      const offset = -wallLen / 2 + spacing * (slot + 1);
-      const pos = wall.axis === 'x'
-        ? [offset, 2.4, wall.base[2]]
-        : [wall.base[0], 2.4, wall.flip ? -offset : offset];
-
-      const frameGroup = new THREE.Group();
-      frameGroup.position.set(pos[0], pos[1], pos[2]);
-      // Hedef, odanın merkezine doğru (normal yönünde) olduğunda lookAt kimlik
-      // rotasyonu üretir: yerel +Z ekseni dünya +normal'e denk gelir. Böylece
-      // yerel z>0 (tuval, plaket) izleyiciye yakın, z<0 (çerçeve) duvara yakın olur.
-      frameGroup.lookAt(pos[0] + wall.normal[0], pos[1], pos[2] + wall.normal[2]);
-
-      // Yer tutucu (yüklenene kadar)
-      // NOT: canvas / çerçeve / plaket arasında Z-fighting olmaması için
-      // her katman net bir Z boşluğuyla ayrılıyor (çerçeve arkada, tuval önde).
-      const placeholderMat = new THREE.MeshStandardMaterial({ color: 0x1c2c48 });
-      const canvasMesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 2.0), placeholderMat);
-      canvasMesh.position.z = 0.03;
-      canvasMesh.receiveShadow = true;
-      frameGroup.add(canvasMesh);
-
-      const frameMat = new THREE.MeshStandardMaterial({ color: 0xc9a84c, roughness: 0.35, metalness: 0.55 });
-      const frameThick = 0.08;
-      const frameDepth = 0.04;
-      const frameBorder = new THREE.Mesh(
-        new THREE.BoxGeometry(1.6 + frameThick * 2, 2.0 + frameThick * 2, frameDepth),
-        frameMat
-      );
-      frameBorder.position.z = -0.02;
-      frameBorder.castShadow = true;
-      frameGroup.add(frameBorder);
-
-      const plaqueTex = makePlaqueTexture(img.title || null, img.artist || null);
-      let plaque = null;
-      if (plaqueTex) {
-        const plaqueMat = new THREE.MeshBasicMaterial({ map: plaqueTex });
-        plaque = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.22), plaqueMat);
-        plaque.position.set(0, -1.35, 0.05);
-        frameGroup.add(plaque);
-      }
-
-      frameGroup.userData.imgData = img;
-      frameGroup.userData.canvasMesh = canvasMesh;
-      frameGroup.userData.basePosition = frameGroup.position.clone();
-      frameGroup.userData.normal = new THREE.Vector3(wall.normal[0], 0, wall.normal[2]);
-
-      roomGroup.add(frameGroup);
-      state.frames.push(frameGroup);
-
-      // Her eserin kendi spot ışığı — resmin önünde/üstünde, aşağı doğru
-      // tutan sıcak bir spot. Performans için gölge düşürmüyor (yalnızca
-      // ana yön ışığı gölge hesaplıyor); onlarca eser olsa bile ucuzdur.
-      const lightOut = 0.85;
-      const spot = new THREE.SpotLight(0xfff2d6, 6, 4.2, Math.PI / 6, 0.55, 1.4);
-      spot.position.set(
-        pos[0] + wall.normal[0] * lightOut,
-        pos[1] + 1.15,
-        pos[2] + wall.normal[2] * lightOut
-      );
-      const spotTarget = new THREE.Object3D();
-      spotTarget.position.set(pos[0], pos[1] - 0.25, pos[2]);
-      roomGroup.add(spotTarget);
-      spot.target = spotTarget;
-      roomGroup.add(spot);
-
-      // Doku asenkron yüklenir, yüklenince gerçek boy oranına göre yeniden boyutlanır
-      loadImageTexture(img.thumbSrc ? img.thumbSrc.replace(/=w\d+/, '=w' + texWidth) : img.src).then(tex => {
-        if (!tex) return;
-        if (!isCurrent(run)) { tex.dispose(); return; }
-        const ratio = tex.image.width / tex.image.height;
-        let w = 1.8, h = 1.8 / ratio;
-        if (h > 2.2) { h = 2.2; w = h * ratio; }
-        canvasMesh.geometry.dispose();
-        canvasMesh.geometry = new THREE.PlaneGeometry(w, h);
-        canvasMesh.material.dispose();
-        canvasMesh.material = new THREE.MeshBasicMaterial({ map: tex });
-
-        frameBorder.geometry.dispose();
-        frameBorder.geometry = new THREE.BoxGeometry(w + frameThick * 2, h + frameThick * 2, frameDepth);
-        if (plaque) plaque.position.y = -(h / 2) - 0.3;
-      });
-    });
-  }
-
-  /* ─── KARŞILAMA PANOSU (okul logosu + sergi bilgisi) ────── */
-
-  function loadImageElement(src, signal) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      const finish = (error) => {
+      const image = new Image();
+      image.crossOrigin = 'anonymous';
+      let settled = false;
+      const finish = success => {
+        if (settled) return;
+        settled = true;
         clearTimeout(timer);
         signal.removeEventListener('abort', abort);
-        img.onload = img.onerror = null;
-        if (error) { img.src = ''; reject(error); } else resolve(img);
+        image.onload = image.onerror = null;
+        if (!success) { image.src = ''; resolve(null); return; }
+        const texture = new THREE.Texture(image);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.needsUpdate = true;
+        resolve(texture);
       };
-      const abort = () => finish(new Error('Görsel yükleme iptal edildi'));
-      const timer = setTimeout(abort, 10000);
+      const abort = () => finish(false);
+      const timer = setTimeout(abort, 15000);
       signal.addEventListener('abort', abort, { once: true });
-      img.onload = () => finish();
-      img.onerror = () => finish(new Error('Görsel yüklenemedi'));
-      img.src = src;
+      image.onload = () => finish(true);
+      image.onerror = abort;
+      if (signal.aborted) abort();
+      else image.src = url;
     });
   }
 
-  // Metni verilen kutuya sığdırmak için font boyutunu adım adım küçültür;
-  // en küçük boyutta bile sığmazsa son satırı "…" ile keser.
-  function fitParagraph(ctx, text, maxWidth, maxHeight, startSize, minSize, lineHeightRatio) {
-    lineHeightRatio = lineHeightRatio || 1.4;
-    const wrap = (fontSize) => {
-      ctx.font = fontSize + 'px Georgia, serif';
-      const words = text.split(/\s+/);
-      const lines = [];
-      let line = '';
-      for (const word of words) {
-        const test = line ? line + ' ' + word : word;
-        if (ctx.measureText(test).width > maxWidth && line) {
-          lines.push(line);
-          line = word;
-        } else {
-          line = test;
+  function placeArtworks(room, plan, run) {
+    const tasks = [];
+    const current = () => isCurrent(run) && run.room === room;
+    const signal = run.roomController.signal;
+    for (const slot of plan.slots) {
+      const img = state.images[slot.index];
+      const frame = new THREE.Group();
+      frame.position.set(...slot.position);
+      frame.lookAt(slot.position[0] + slot.normal[0], slot.position[1], slot.position[2] + slot.normal[2]);
+      frame.userData.imgData = img;
+      room.add(frame);
+      state.frames.push(frame);
+      const border = new THREE.Mesh(new THREE.BoxGeometry(1.65, 2.05, 0.055), new THREE.MeshStandardMaterial({ color: 0x303638, roughness: 0.8 }));
+      const mount = new THREE.Mesh(new THREE.PlaneGeometry(1.59, 1.99), new THREE.MeshBasicMaterial({ color: 0xf3f1e9, toneMapped: false }));
+      mount.position.z = 0.035;
+      const canvas = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.8), new THREE.MeshBasicMaterial({ color: 0xd9deda, toneMapped: false }));
+      canvas.position.z = 0.04;
+      frame.add(border, mount, canvas);
+      const plaque = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 0.24), new THREE.MeshBasicMaterial({
+        map: labelTexture(String(slot.index + 1).padStart(2, '0') + '  ' + (img.title || 'Eser ' + (slot.index + 1)), img.artist || 'Bilgi için eseri seçin'), toneMapped: false
+      }));
+      plaque.position.set(0, -1.23, 0.04);
+      frame.add(plaque);
+      tasks.push(async () => {
+        const width = state.isMobile ? 640 : 1200;
+        const texture = await loadImageTexture(img.thumbSrc ? img.thumbSrc.replace(/=w\d+/, '=w' + width) : img.src, signal);
+        if (!current()) { texture?.dispose(); return; }
+        if (!texture) {
+          canvas.material.map = labelTexture('Görsel yüklenemedi', 'İncelemek için seçin');
+          canvas.material.color.set(0xffffff);
+          canvas.material.needsUpdate = true;
+          return;
         }
-      }
-      if (line) lines.push(line);
-      return lines;
-    };
-
-    for (let fontSize = startSize; fontSize >= minSize; fontSize -= 1) {
-      const lines = wrap(fontSize);
-      if (lines.length * fontSize * lineHeightRatio <= maxHeight) {
-        return { fontSize, lineHeight: fontSize * lineHeightRatio, lines };
-      }
+        const size = GalleryLayout.fitArtwork(texture.image.width, texture.image.height);
+        canvas.geometry.dispose(); canvas.geometry = new THREE.PlaneGeometry(size.width, size.height);
+        canvas.material.dispose(); canvas.material = new THREE.MeshBasicMaterial({ map: texture, toneMapped: false });
+        mount.geometry.dispose(); mount.geometry = new THREE.PlaneGeometry(size.width + 0.18, size.height + 0.18);
+        border.geometry.dispose(); border.geometry = new THREE.BoxGeometry(size.width + 0.24, size.height + 0.24, 0.055);
+        plaque.position.y = -size.height / 2 - 0.28;
+      });
     }
-
-    // En küçük boyutta da sığmıyor: sığan kadar satır al, sonuncusunu "…" ile kes.
-    const fontSize = minSize;
-    const lineHeight = fontSize * lineHeightRatio;
-    const maxLines = Math.max(1, Math.floor(maxHeight / lineHeight));
-    ctx.font = fontSize + 'px Georgia, serif';
-    const words = text.split(/\s+/);
-    const lines = [];
-    let line = '';
-    for (const word of words) {
-      const test = line ? line + ' ' + word : word;
-      if (ctx.measureText(test).width > maxWidth && line) {
-        lines.push(line);
-        line = word;
-        if (lines.length >= maxLines) break;
-      } else {
-        line = test;
-      }
+    let next = 0;
+    async function worker() {
+      while (current() && next < tasks.length) await tasks[next++]();
     }
-    if (line && lines.length < maxLines) lines.push(line);
-    if (lines.length >= maxLines) {
-      let last = lines[maxLines - 1];
-      while (last.length > 3 && ctx.measureText(last + '…').width > maxWidth) last = last.slice(0, -1);
-      lines[maxLines - 1] = last + '…';
-    }
-    return { fontSize, lineHeight, lines };
+    // Ağ ve GPU yükü, koleksiyonun tamamından bağımsız olarak sınırlandırılır.
+    for (let i = 0; i < Math.min(4, tasks.length); i++) worker().catch(() => {});
   }
-
-  function buildWelcomeSignTexture(schoolName, exhibitionName, description, logoImg) {
-    const canvas = document.createElement('canvas');
-    canvas.width = 1100;
-    canvas.height = 480;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#f6f2e8';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.strokeStyle = '#c9a84c';
-    ctx.lineWidth = 6;
-    ctx.strokeRect(6, 6, canvas.width - 12, canvas.height - 12);
-
-    const padding = 48;
-    const logoSize = 240;
-    let textX = padding;
-
-    if (logoImg) {
-      const lx = padding, ly = (canvas.height - logoSize) / 2;
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(lx + logoSize / 2, ly + logoSize / 2, logoSize / 2, 0, Math.PI * 2);
-      ctx.clip();
-      ctx.drawImage(logoImg, lx, ly, logoSize, logoSize);
-      ctx.restore();
-      ctx.strokeStyle = '#c9a84c';
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.arc(lx + logoSize / 2, ly + logoSize / 2, logoSize / 2, 0, Math.PI * 2);
-      ctx.stroke();
-      textX = lx + logoSize + 48;
-    }
-
-    const textWidth = canvas.width - textX - padding;
-    ctx.textAlign = 'left';
-
-    ctx.fillStyle = '#8c8474';
-    ctx.font = '600 26px Georgia, serif';
-    ctx.fillText(truncateText(ctx, (schoolName || '').toUpperCase(), textWidth), textX, 66);
-
-    ctx.fillStyle = '#1a1711';
-    ctx.font = '700 48px Georgia, serif';
-    ctx.fillText(truncateText(ctx, exhibitionName || 'Sanal Sergi', textWidth), textX, 124);
-
-    if (description) {
-      ctx.fillStyle = '#4a4438';
-      const descTop = 160;
-      const descMaxHeight = canvas.height - descTop - padding + 10;
-      const { lineHeight, lines } = fitParagraph(ctx, description, textWidth, descMaxHeight, 24, 16);
-      lines.forEach((line, i) => ctx.fillText(line, textX, descTop + i * lineHeight));
-    }
-
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    return { tex, aspect: canvas.width / canvas.height };
-  }
-
-  async function addWelcomeSign(roomGroup, schoolName, exhibitionName, description, run) {
-    let logoImg = null;
-    try { logoImg = await loadImageElement('/assets/logo.png', run.controller.signal); } catch (e) { /* logo olmadan devam */ }
-    if (!isCurrent(run)) return null;
-
-    const { tex, aspect } = buildWelcomeSignTexture(schoolName, exhibitionName, description, logoImg);
-    const mat = new THREE.MeshBasicMaterial({ map: tex });
-
-    const partitionZ = -Math.min(4.3, Math.max(2.6, state.roomHalfDepth - 1.2));
-    // Dar ekranlarda pano, başlangıçtaki yatay görüş alanına sığar.
-    const visibleWidth = 2 * (Math.abs(partitionZ) - 0.2) * Math.tan(camera.fov * Math.PI / 360) * camera.aspect;
-    const signWidth = Math.min(state.roomHalfWidth * 1.1, 5.5, visibleWidth * 0.8);
-    const signHeight = signWidth / aspect;
-    const partitionThickness = 0.22;
-    const partitionHeight = Math.max(signHeight + 0.9, 2.2);
-    const partitionWidth = signWidth + 0.6;
-
-    // Serbest duran orta bölme duvarı — girişten hemen sonra, iki yüzünde de
-    // aynı karşılama panosu bulunur, böylece hangi yönden yaklaşılırsa
-    // yaklaşılsın pano görülür.
-    // Spawn noktasından (0,1.65,0) rahat okunacak bir mesafede — çok yakın
-    // olursa pano ekranı kaplar, çok uzak olursa okunmaz.
-    const partitionMat = new THREE.MeshStandardMaterial({ color: 0xe4dac8, roughness: 0.85 });
-    const partition = new THREE.Mesh(
-      new THREE.BoxGeometry(partitionWidth, partitionHeight, partitionThickness),
-      partitionMat
-    );
-    partition.position.set(0, partitionHeight / 2, partitionZ);
-    partition.castShadow = true;
-    partition.receiveShadow = true;
-    roomGroup.add(partition);
-
-    const y = Math.max(partitionHeight / 2 + 0.1, 1.65);
-    const frameMat = new THREE.MeshStandardMaterial({ color: 0xc9a84c, roughness: 0.35, metalness: 0.55 });
-
-    // Ön yüz (girişe/spawn noktasına bakar, normal +Z)
-    const frontFrame = new THREE.Mesh(new THREE.BoxGeometry(signWidth + 0.18, signHeight + 0.18, 0.05), frameMat);
-    frontFrame.position.set(0, y, partitionZ + partitionThickness / 2 + 0.03);
-    roomGroup.add(frontFrame);
-    const frontSign = new THREE.Mesh(new THREE.PlaneGeometry(signWidth, signHeight), mat);
-    frontSign.position.set(0, y, partitionZ + partitionThickness / 2 + 0.06);
-    roomGroup.add(frontSign);
-
-    // Arka yüz (kuzey duvarına doğru bakar, normal -Z) — aynı doku, 180° döndürülmüş
-    const backFrame = new THREE.Mesh(new THREE.BoxGeometry(signWidth + 0.18, signHeight + 0.18, 0.05), frameMat);
-    backFrame.position.set(0, y, partitionZ - partitionThickness / 2 - 0.03);
-    roomGroup.add(backFrame);
-    const backSign = new THREE.Mesh(new THREE.PlaneGeometry(signWidth, signHeight), mat);
-    backSign.position.set(0, y, partitionZ - partitionThickness / 2 - 0.06);
-    backSign.rotation.y = Math.PI;
-    roomGroup.add(backSign);
-
-    return { partitionZ, partitionWidth };
-  }
-
-  /* ─── SAHNE KURULUMU ─────────────────────────────────────── */
 
   function setupScene(container) {
     scene = new THREE.Scene();
-    // Daha uzak ve daha aydınlık sis — davetkâr bir salon hissi, ürkütücü karanlık boşluk değil
-    const fogColor = 0xd8cfbc;
-    scene.fog = new THREE.Fog(fogColor, 16, 34);
-    scene.background = new THREE.Color(fogColor);
-
-    camera = new THREE.PerspectiveCamera(70, container.clientWidth / container.clientHeight, 0.1, 100);
-    camera.position.set(0, 1.65, 0);
-
+    scene.background = new THREE.Color(0xe8e7e2);
+    camera = new THREE.PerspectiveCamera(62, container.clientWidth / container.clientHeight, 0.1, 80);
     renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, state.isMobile ? 1.5 : 2));
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1;
     container.appendChild(renderer.domElement);
+    // Sabit üç ışık; eser renkleri ışık/tone mapping etkisinden bağımsızdır.
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xaaa79c, 2.2));
+    const key = new THREE.DirectionalLight(0xfffaf0, 1.5);
+    key.position.set(3, 7, 4); scene.add(key);
+    const fill = new THREE.DirectionalLight(0xf1f5ff, 0.7);
+    fill.position.set(-4, 5, -3); scene.add(fill);
+  }
 
-    // Parlak, sıcak genel aydınlatma — flat/steril "backrooms" hissi yerine
-    // rahat, gerçek bir müze salonu izlenimi. Ana yön ışığı gölge düşürür,
-    // ikinci ışık sadece dolgu (gölgesiz) — performans için tek gölge kaynağı yeterli.
-    const ambient = new THREE.AmbientLight(0xfff1de, 0.75);
-    scene.add(ambient);
-    const dir = new THREE.DirectionalLight(0xfff0d0, 0.9);
-    dir.position.set(4, 9, 4);
-    dir.castShadow = true;
-    dir.shadow.mapSize.set(2048, 2048);
-    dir.shadow.camera.left = -16;
-    dir.shadow.camera.right = 16;
-    dir.shadow.camera.top = 16;
-    dir.shadow.camera.bottom = -16;
-    dir.shadow.camera.near = 1;
-    dir.shadow.camera.far = 30;
-    dir.shadow.bias = -0.0015;
-    scene.add(dir);
-    scene.add(dir.target);
-    const dir2 = new THREE.DirectionalLight(0xffe8cc, 0.4);
-    dir2.position.set(-4, 6, -4);
-    scene.add(dir2);
-
-    state.velocity = new THREE.Vector3();
+  function showRoom(roomIndex) {
+    const run = session;
+    if (!run || state.inspecting) return;
+    const plan = GalleryLayout.plan(state.images.length, roomIndex);
+    run.roomController?.abort();
+    if (run.room) { scene.remove(run.room); disposeObjects([run.room]); }
+    run.roomController = new AbortController();
+    state.roomIndex = roomIndex;
+    state.roomHalfWidth = plan.width / 2;
+    state.roomHalfDepth = plan.depth / 2;
+    state.wallHeight = plan.height;
+    state.frames = [];
+    state.yaw = 0; state.pitch = 0;
+    resetControls();
+    if (document.pointerLockElement === el('gal3d-canvas-container')) document.exitPointerLock();
+    camera.position.set(...plan.spawn);
+    camera.rotation.set(0, 0, 0);
+    const room = GalleryRoom.create(THREE, plan, run.exhibitionName, run.schoolName);
+    run.room = room;
+    scene.add(room);
+    placeArtworks(room, plan, run);
+    setupArtworkPicker(plan);
+    el('gal3d-room-select').value = String(roomIndex);
+    el('gal3d-room-prev').disabled = roomIndex === 0;
+    el('gal3d-room-next').disabled = roomIndex === plan.roomCount - 1;
+    el('gal3d-room-status').textContent = (plan.start + 1) + '–' + plan.end + ' / ' + state.images.length + ' eser';
+    el('gal3d-room-nav').classList.remove('hidden');
   }
 
   function onResize(container) {
@@ -976,15 +250,15 @@
     return true;
   }
 
-  function setupArtworkPicker() {
+  function setupArtworkPicker(plan) {
     const select = el('gal3d-artwork-select');
     select.replaceChildren();
-    state.images.forEach((image, index) => {
+    state.images.slice(plan.start, plan.end).forEach((image, localIndex) => {
+      const index = plan.start + localIndex;
       select.add(new Option((index + 1) + '. ' + (image.title || image.artist || 'Eser ' + (index + 1)), String(index)));
     });
     el('gal3d-artwork-picker').classList.remove('hidden');
     el('gal3d-aim').classList.toggle('hidden', state.isMobile);
-    listen(el('gal3d-inspect'), 'click', () => inspectArtwork(Number(select.value)));
   }
 
   function setupDesktopControls(container) {
@@ -1203,7 +477,7 @@
     const loading = el('gal3d-loading');
     if (!overlay || !container) return;
 
-    const run = { controller: new AbortController(), roots: new Set(), pendingModels: 0, exhibitionName };
+    const run = { controller: new AbortController(), exhibitionName };
     session = run;
     state.active = true;
     state.inspecting = false;
@@ -1213,6 +487,7 @@
     loading.classList.remove('hidden');
     el('gal3d-artwork-picker').classList.add('hidden');
     el('gal3d-aim').classList.add('hidden');
+    el('gal3d-room-nav').classList.add('hidden');
     run.releaseModal = window.activateGalleryModal(overlay);
     listen(window, 'keydown', escListener);
     listen(window, 'blur', resetControls);
@@ -1239,14 +514,20 @@
       const schoolName = typeof SCHOOL_NAME !== 'undefined' ? SCHOOL_NAME : 'Sanal Sergi';
       const badgeSchool = el('gal3d-badge-school');
       if (badgeSchool) badgeSchool.textContent = schoolName;
+      run.schoolName = schoolName;
+      el('gal3d-exhibition-name').textContent = exhibitionName;
+      el('gal3d-exhibition-name').title = exhibitionName;
 
       setupScene(container);
-      const room = buildRoom(images.length);
-      scene.add(room);
-      placeArtworks(room, images, run);
-      const signInfo = await addWelcomeSign(room, schoolName, exhibitionName, exhibitionDescription, run);
-      if (!isCurrent(run)) return;
-      enhanceRoomWithRealModels(room, signInfo, run);
+      const rooms = GalleryLayout.plan(images.length).roomCount;
+      const roomSelect = el('gal3d-room-select');
+      roomSelect.replaceChildren();
+      for (let i = 0; i < rooms; i++) roomSelect.add(new Option('Salon ' + (i + 1) + ' / ' + rooms, String(i)));
+      showRoom(0);
+      listen(roomSelect, 'change', () => showRoom(Number(roomSelect.value)));
+      listen(el('gal3d-room-prev'), 'click', () => { showRoom(state.roomIndex - 1); roomSelect.focus(); });
+      listen(el('gal3d-room-next'), 'click', () => { showRoom(state.roomIndex + 1); roomSelect.focus(); });
+      listen(el('gal3d-inspect'), 'click', () => inspectArtwork(Number(el('gal3d-artwork-select').value)));
 
       if (state.isMobile) {
         setupMobileControls(container);
@@ -1254,7 +535,6 @@
         setupDesktopControls(container);
       }
 
-      setupArtworkPicker();
       listen(window, 'resize', () => onResize(container));
 
       clock = new THREE.Clock();
@@ -1277,15 +557,15 @@
     session = null;
     state.active = false;
     run.controller.abort();
+    run.roomController?.abort();
     resetControls();
     cancelAnimationFrame(raf);
     raf = null;
 
     const container = el('gal3d-canvas-container');
     if (document.pointerLockElement === container) document.exitPointerLock();
-    disposeObjects([scene, ...run.roots]);
-    run.roots.clear();
-    if (run.pendingModels === 0) run.dracoLoader?.dispose();
+    disposeObjects([scene]);
+    run.room = null;
     if (renderer) {
       renderer.dispose();
       if (renderer.domElement.parentNode === container) container.removeChild(renderer.domElement);
@@ -1293,7 +573,6 @@
     scene = null; camera = null; renderer = null; clock = null;
     state.frames = [];
     state.images = [];
-    state.velocity = null;
 
     el('gal3d-overlay').classList.add('hidden');
     run.releaseModal();

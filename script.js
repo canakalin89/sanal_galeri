@@ -533,13 +533,17 @@ let gallery3DLoading = null;
 function loadGallery3DScript() {
   if (window.openGallery3D) return Promise.resolve();
   if (gallery3DLoading) return gallery3DLoading;
-  gallery3DLoading = new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = 'gallery3d.js';
-    s.onload = resolve;
-    s.onerror = () => { gallery3DLoading = null; reject(new Error('gallery3d.js yüklenemedi')); };
-    document.body.appendChild(s);
-  });
+  gallery3DLoading = (async () => {
+    for (const source of ['gallery-layout.js', 'gallery-room.js', 'gallery3d.js']) {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = source;
+        script.onload = resolve;
+        script.onerror = () => { script.remove(); reject(new Error(source + ' yüklenemedi')); };
+        document.body.appendChild(script);
+      });
+    }
+  })().catch(error => { gallery3DLoading = null; throw error; });
   return gallery3DLoading;
 }
 
