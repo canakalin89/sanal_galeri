@@ -7,19 +7,10 @@ function driveImgUrl(fileId, width) {
   return 'https://lh3.googleusercontent.com/d/' + fileId + '=w' + (width || 1600);
 }
 
-const driveFilesCache = {}; // folderId -> files[]
+const galleryData = GalleryData.createClient();
 
-async function fetchDriveFiles(folderId) {
-  if (driveFilesCache[folderId]) return driveFilesCache[folderId];
-  const r = await fetch('/api/drive?action=list&folderId=' + encodeURIComponent(folderId));
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.error || 'Drive klasörü okunamadı');
-  driveFilesCache[folderId] = data.files || [];
-  return driveFilesCache[folderId];
-}
-
-async function resolveDriveExhibitionImages(ex) {
-  const files = await fetchDriveFiles(ex.driveFolderId);
+async function resolveDriveExhibitionImages(ex, force = false) {
+  const files = await galleryData.getFiles(ex.driveFolderId, force);
   const metaImages = ex.images || {};
   return files.map(f => {
     const m = metaImages[f.id] || {};
@@ -38,14 +29,11 @@ async function resolveDriveExhibitionImages(ex) {
 let ALL_EXHIBITIONS = [];
 let exhibitionsReady = false;
 let galleryViewVersion = 0;
+let routeVersion = 0;
+let coverObserver = null;
 
 async function loadExhibitionsMeta() {
-  try {
-    const r = await fetch('exhibitions.json', { cache: 'no-store' });
-    ALL_EXHIBITIONS = r.ok ? await r.json() : [];
-  } catch {
-    ALL_EXHIBITIONS = [];
-  }
+  ALL_EXHIBITIONS = await galleryData.getCatalog();
   exhibitionsReady = true;
 }
 
@@ -56,13 +44,25 @@ function findExhibitionMeta(id) {
 /* ─── ROUTING (hash tabanlı) ─────────────────────────────── */
 
 async function route() {
+  const version = ++routeVersion;
+  galleryViewVersion++;
+  coverObserver?.disconnect();
   closeLightbox();
   window.closeGallery3D?.();
-  if (!exhibitionsReady) await loadExhibitionsMeta();
+  try {
+    if (!exhibitionsReady) await loadExhibitionsMeta();
+  } catch (error) {
+    if (version !== routeVersion) return;
+    showHome(error.message);
+    return;
+  }
+  if (version !== routeVersion) return;
   const id = location.hash.slice(1);
   const exhibition = id ? findExhibitionMeta(id) : null;
   if (exhibition) {
     showGallery(exhibition);
+  } else if (id) {
+    showHome(null, true);
   } else {
     showHome();
   }
@@ -90,23 +90,67 @@ function makeLabel(img, exhibitionName, index) {
 
 /* ─── ANA SAYFA ──────────────────────────────────────────── */
 
-async function showHome() {
-  galleryViewVersion++;
+function showMessage(container, title, message, action, label = 'Tekrar dene') {
+  container.replaceChildren();
+  const panel = document.createElement('div');
+  panel.className = 'gallery-error';
+  panel.setAttribute('role', 'status');
+  const heading = document.createElement('strong');
+  heading.textContent = title;
+  const description = document.createElement('p');
+  description.textContent = message;
+  panel.append(heading, description);
+  if (action) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'gallery-retry';
+    button.textContent = label;
+    button.addEventListener('click', action);
+    panel.appendChild(button);
+  }
+  container.appendChild(panel);
+}
+
+function showHome(error = null, missing = false) {
+  const version = ++galleryViewVersion;
+  coverObserver?.disconnect();
   document.getElementById('view-home').classList.remove('hidden');
   document.getElementById('view-gallery').classList.add('hidden');
   document.getElementById('site-header').classList.remove('hidden');
   document.title = typeof SCHOOL_NAME !== 'undefined' ? 'Sanal Sergi — ' + SCHOOL_NAME : 'Sanal Sergi';
 
   const statCount = document.getElementById('stat-count');
-  if (statCount) statCount.textContent = ALL_EXHIBITIONS.length;
+  if (statCount) statCount.textContent = error ? '—' : ALL_EXHIBITIONS.length;
 
   const container = document.getElementById('exhibitions');
   container.innerHTML = '';
+
+  if (error) {
+    showMessage(container, 'Sergiler yüklenemedi', error, () => {
+      showMessage(container, 'Sergiler yükleniyor…', 'Lütfen bekleyin.');
+      route();
+    });
+    return;
+  }
+  if (missing) {
+    showMessage(container, 'Sergi bulunamadı', 'Bu bağlantı eski olabilir veya sergi kaldırılmış olabilir.', () => { location.hash = ''; }, 'Tüm sergilere dön');
+    return;
+  }
 
   if (ALL_EXHIBITIONS.length === 0) {
     container.innerHTML = '<p class="empty"><span class="empty-icon">&#127912;</span>Henüz sergi eklenmedi.</p>';
     return;
   }
+
+  const coverLoaders = new WeakMap();
+  const observer = 'IntersectionObserver' in window ? new IntersectionObserver(entries => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      observer.unobserve(entry.target);
+      coverLoaders.get(entry.target)?.();
+    }
+  }, { rootMargin: '300px' }) : null;
+  coverObserver = observer;
 
   ALL_EXHIBITIONS.forEach((ex, idx) => {
     const card = document.createElement('a');
@@ -130,8 +174,9 @@ async function showHome() {
     const thumbEl = card.querySelector('.card-thumb');
     const countEl = card.querySelector('.card-count');
 
-    resolveDriveExhibitionImages(ex)
+    const loadCover = () => resolveDriveExhibitionImages(ex)
       .then(images => {
+        if (version !== galleryViewVersion) return;
         thumbEl.classList.remove('skeleton');
         if (images.length > 0) {
           thumbEl.innerHTML =
@@ -143,16 +188,21 @@ async function showHome() {
         countEl.textContent = images.length + ' eser';
       })
       .catch(() => {
+        if (version !== galleryViewVersion) return;
         thumbEl.classList.remove('skeleton');
-        countEl.textContent = 'Yüklenemedi';
+        countEl.textContent = 'Önizleme yüklenemedi · Sergiyi açıp tekrar deneyin';
       });
+    coverLoaders.set(card, loadCover);
+    if (observer) observer.observe(card);
+    else loadCover();
   });
 }
 
 /* ─── GALERİ SAYFASI ─────────────────────────────────────── */
 
-async function showGallery(exhibition) {
+async function showGallery(exhibition, force = false) {
   const version = ++galleryViewVersion;
+  coverObserver?.disconnect();
   document.getElementById('view-home').classList.add('hidden');
   document.getElementById('view-gallery').classList.remove('hidden');
   document.getElementById('site-header').classList.add('hidden');
@@ -169,6 +219,9 @@ async function showGallery(exhibition) {
 
   const countEl = document.getElementById('gallery-count');
   countEl.textContent = '';
+  const refresh = document.getElementById('btn-refresh');
+  refresh.disabled = true;
+  refresh.onclick = () => showGallery(exhibition, true);
 
   const btn3d = document.getElementById('btn-3d');
   btn3d.classList.add('hidden');
@@ -176,25 +229,31 @@ async function showGallery(exhibition) {
   const grid = document.getElementById('gallery');
   window.scrollTo({ top: 0, behavior: 'instant' });
 
-  grid.innerHTML = '<div class="gallery-loading"><div class="spinner"></div><p>Sergi yükleniyor…</p></div>';
+  grid.classList.add('gallery-state');
+  grid.innerHTML = '<div class="gallery-loading" role="status"><div class="spinner"></div><p>Sergi yükleniyor…</p></div>';
   let images;
   try {
-    images = await resolveDriveExhibitionImages(exhibition);
+    images = await resolveDriveExhibitionImages(exhibition, force);
   } catch (err) {
     if (version !== galleryViewVersion) return;
-    grid.innerHTML = '<div class="gallery-error"><strong>Sergi yüklenemedi</strong><p>' + escapeHtml(err.message) + '</p></div>';
+    refresh.disabled = false;
+    showMessage(grid, 'Sergi yüklenemedi', err.message, () => showGallery(exhibition, true));
+    if (force) refresh.focus({ preventScroll: true });
     return;
   }
 
   if (version !== galleryViewVersion) return;
+  refresh.disabled = false;
+  if (force) refresh.focus({ preventScroll: true });
   countEl.textContent = images.length + ' eser';
   grid.innerHTML = '';
 
   if (images.length === 0) {
-    grid.innerHTML = '<div class="gallery-error"><strong>Bu sergide henüz eser yok.</strong></div>';
+    showMessage(grid, 'Bu sergide henüz eser yok.', 'Yeni eserler eklendiyse listeyi yenileyebilirsiniz.', () => showGallery(exhibition, true), 'Eserleri yenile');
     return;
   }
 
+  grid.classList.remove('gallery-state');
   btn3d.classList.remove('hidden');
   btn3d.onclick = () => open3DGallery(images, exhibition.name, exhibition.description);
 

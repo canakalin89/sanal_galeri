@@ -14,9 +14,13 @@ işlevleri birlikte çalışır. Normal galeriye ek olarak Three.js ile 3D salon
    Paneldeki kayıt bildirimi yayın başarısı anlamına gelmez.
 
 Drive'a görsel eklemek veya kaldırmak yeniden yayınlama gerektirmez.
-Ziyaretçi liste yanıtı en fazla 60 saniye CDN önbelleğinde tutulur;
-açık sayfa kendi belleğindeki listeyi kullanır. Güncellemeyi görmek için
-sayfayı yenileyin. Yeni sergi klasörünün ziyaretçi erişimi ise yeni yayınla açılır.
+Ziyaretçi liste yanıtı en fazla 60 saniye CDN önbelleğinde tutulur.
+Tarayıcı başarılı eser listesini 60 saniye saklar; aynı klasöre eşzamanlı
+istekler tek çağrıyı paylaşır. Süre dolunca sonraki açılışta yeniden okunur.
+Galeri başlığındaki ↻ düğmesi tarayıcıdaki listeyi beklemeden yeniden ister;
+CDN önbelleği nedeniyle en son Drive değişikliği hemen görünmeyebilir.
+Bu düğme yalnızca eser listesini yeniler; yayımlanan sergi adı/açıklaması
+değiştiyse sayfayı yenileyin. Yeni sergi klasörünün erişimi yeni yayınla açılır.
 
 Sergiyi kaldırmak yalnızca site bağlantısını kaldırır, Drive dosyalarını silmez.
 Drive'da görünmeyen eserlerin önceden kaydedilmiş açıklamaları korunur.
@@ -142,6 +146,7 @@ birlikte güncelleyin.
 ## Dosya haritası
 
 - index.html / style.css / script.js: ziyaretçi galerisi ve büyük görsel penceresi
+- gallery-data.js: ziyaretçi yanıt doğrulaması, ortak istekler ve kısa önbellek
 - gallery3d.js / vendor/: 3D salon, yerel Three.js ve modeller
 - admin.html / admin-app.js / admin-state.js: yönetim arayüzü ve veri koruma
 - api/auth.js: giriş, oturum sorgusu, çıkış
@@ -182,6 +187,12 @@ duraklatma düğmesini kullanın. Gömme modunda oynatıcı yüklenmez.
 ```
 
 Gömme modunda geri düğmesi, radyo ve altbilgi gizlenir.
+Geçersiz sergi bağlantısında açıklama ve tüm sergilere dönüş düğmesi görünür.
+Sergi/katalog yükleme hataları boş liste gibi gösterilmez; Tekrar dene ile
+sayfa yenilemeden yeniden okunabilir. Ziyaretçi veri istekleri, yanıt gövdesi
+dahil 15 saniyede zaman aşımına uğrar. Başarısız/bozuk yanıtlar önbelleğe alınmaz.
+Ana sayfada kapak ve eser sayısı yalnızca ekran yakınına gelen kartlar için
+istenir; gözlem API'si bulunmayan tarayıcılarda normal yükleme kullanılır.
 Gömme ve 3D kontrolleri değişik tarayıcılarda ayrıca denenmelidir.
 
 Tasarım ve geliştirme: Can Akalın — Aziz Sancar Anadolu Lisesi.
