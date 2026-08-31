@@ -92,6 +92,7 @@
         <h2 id="gallery-title"></h2>
       </div>
       <span class="gallery-count" id="gallery-count"></span>
+      <button id="btn-refresh" class="btn-refresh" aria-label="Eser listesini yenile" title="Eser listesini yenile">↻</button>
       <button id="btn-3d" class="btn-3d hidden">&#127963; 3D Salonda Gez</button>
     </div>
     <p id="gallery-desc" class="gallery-desc hidden"></p>
@@ -198,6 +199,7 @@
     }
     document.getElementById('footer-year').textContent = new Date().getFullYear();
   </script>
+  <script src="gallery-data.js"></script>
   <script src="script.js"></script>
   <script>
     (function () {

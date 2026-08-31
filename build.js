@@ -11,7 +11,7 @@ validateDocument('config.json', config);
 validateDocument('exhibitions.json', exhibitions);
 fs.rmSync(output, { recursive: true, force: true });
 fs.mkdirSync(output);
-const files = ['index.html', 'style.css', 'script.js', 'gallery3d.js', 'admin.html', 'admin.css', 'admin-app.js', 'admin-state.js', 'exhibitions.json'];
+const files = ['index.html', 'style.css', 'script.js', 'gallery-data.js', 'gallery3d.js', 'admin.html', 'admin.css', 'admin-app.js', 'admin-state.js', 'exhibitions.json'];
 for (const file of files) fs.copyFileSync(path.join(root, file), path.join(output, file));
 for (const directory of ['assets', 'vendor']) fs.cpSync(path.join(root, directory), path.join(output, directory), { recursive: true });
 fs.writeFileSync(path.join(output, 'images-list.js'), 'const SCHOOL_NAME = ' + JSON.stringify(config.schoolName) + ';\n');
