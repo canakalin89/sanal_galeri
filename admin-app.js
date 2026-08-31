@@ -4,76 +4,69 @@
 
 /* ─── DURUM ──────────────────────────────────────────────── */
 
-let GH = null;                     // { token, owner, repo, branch }
+let csrfToken = null;
 let currentExhibitionsList = [];   // exhibitions.json içeriği (tam dizi)
 let currentExhibition = null;      // düzenlenen sergi (dizi içindeki referans)
 let currentDriveFiles = [];
+let editorSha = null;
+let settingsSha = null;
+let imagesReady = false;
+let busy = false;
+let editorDirty = false;
+let settingsDirty = false;
+let newDirty = false;
+let editorGeneration = 0;
 
 const driveListCache = {};
 
-/* ─── GITHUB API YARDIMCILARI ────────────────────────────── */
+/* ─── AYNI KAYNAK API YARDIMCILARI ───────────────────────── */
 
-function ghHeaders() {
-  return {
-    'Authorization': `token ${GH.token}`,
-    'Accept': 'application/vnd.github.v3+json',
-    'Content-Type': 'application/json'
-  };
-}
-
-async function readJson(path, fallback) {
-  try {
-    const r = await fetch(
-      `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${path}?ref=${encodeURIComponent(GH.branch)}`,
-      { headers: ghHeaders() }
-    );
-    if (r.status === 404) return fallback;
-    if (!r.ok) throw new Error('Okuma hatası: ' + r.status);
-    const data = await r.json();
-    const text = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ''))));
-    return JSON.parse(text);
-  } catch (err) {
-    console.error('readJson(' + path + ')', err);
-    return fallback;
+async function apiRequest(url, options = {}) {
+  const response = await fetch(url, {
+    ...options, credentials: 'same-origin', cache: 'no-store',
+    signal: AbortSignal.timeout(20000),
+    headers: { 'Content-Type': 'application/json', ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}), ...options.headers }
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    const error = new Error(data.error || 'İşlem tamamlanamadı.');
+    error.status = response.status;
+    throw error;
   }
+  return data;
 }
 
-async function ghPut(path, textContent, message) {
-  let sha = null;
-  try {
-    const existing = await fetch(
-      `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${path}?ref=${encodeURIComponent(GH.branch)}`,
-      { headers: ghHeaders() }
-    );
-    if (existing.ok) sha = (await existing.json()).sha;
-  } catch {}
-
-  const body = {
-    message,
-    content: btoa(unescape(encodeURIComponent(textContent))),
-    branch: GH.branch
-  };
-  if (sha) body.sha = sha;
-
-  const r = await fetch(
-    `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${path}`,
-    { method: 'PUT', headers: ghHeaders(), body: JSON.stringify(body) }
-  );
-  if (!r.ok) {
-    const err = await r.json().catch(() => ({}));
-    throw new Error(err.message || `Kayıt hatası: ${r.status}`);
-  }
-  return r.json();
+async function readJson(path) {
+  return apiRequest('/api/admin?path=' + encodeURIComponent(path));
 }
+
+async function saveJson(path, data, sha) {
+  return apiRequest('/api/admin', { method: 'PUT', body: JSON.stringify({ path, data, sha }) });
+}
+
+function hasUnsavedChanges() { return editorDirty || settingsDirty || newDirty; }
+function mayDiscard() { return !busy && (!hasUnsavedChanges() || confirm('Kaydedilmemiş değişiklikler var. Vazgeçilsin mi?')); }
+function setBusy(value) {
+  busy = value;
+  document.querySelectorAll('button, input, textarea, select').forEach(el => {
+    if (value) { el.dataset.wasDisabled = String(el.disabled); el.disabled = true; }
+    else if ('wasDisabled' in el.dataset) { el.disabled = el.dataset.wasDisabled === 'true'; delete el.dataset.wasDisabled; }
+  });
+}
+document.getElementById('page-editor').addEventListener('input', () => { editorDirty = true; });
+document.getElementById('modal-settings').addEventListener('input', () => { settingsDirty = true; });
+document.getElementById('modal-new').addEventListener('input', () => { newDirty = true; });
+window.addEventListener('beforeunload', e => {
+  if (hasUnsavedChanges() || busy) { e.preventDefault(); e.returnValue = ''; }
+});
 
 /* ─── DRIVE YARDIMCILARI ─────────────────────────────────── */
 
 async function fetchDriveList(folderId, force) {
   if (!force && driveListCache[folderId]) return driveListCache[folderId];
-  const r = await fetch('/api/drive?action=list&folderId=' + encodeURIComponent(folderId));
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.error || 'Drive API hatası');
-  driveListCache[folderId] = data.files || [];
+  const data = await apiRequest('/api/admin-drive?folderId=' + encodeURIComponent(folderId));
+  if (!Array.isArray(data.files)) throw new Error('Görsel listesi doğrulanamadı.');
+  driveListCache[folderId] = data.files;
   return driveListCache[folderId];
 }
 
@@ -140,24 +133,16 @@ document.getElementById('form-login').addEventListener('submit', async e => {
   errEl.classList.add('hidden');
 
   try {
-    const r = await fetch('/api/auth', {
+    const data = await apiRequest('/api/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password })
     });
-    const data = await r.json();
-
-    if (!r.ok) {
-      errEl.textContent = data.error || 'Giriş başarısız';
-      errEl.classList.remove('hidden');
-      return;
-    }
-
-    GH = data;
-    sessionStorage.setItem('gh_session', JSON.stringify(GH));
+    csrfToken = data.csrf;
+    document.getElementById('input-password').value = '';
     showDashboard();
-  } catch {
-    errEl.textContent = 'Bağlantı hatası. Tekrar deneyin.';
+  } catch (err) {
+    errEl.textContent = err.message || 'Bağlantı hatası. Tekrar deneyin.';
     errEl.classList.remove('hidden');
   } finally {
     btn.disabled = false;
@@ -176,9 +161,10 @@ async function showDashboard() {
   grid.classList.add('hidden');
   empty.classList.add('hidden');
   loading.classList.remove('hidden');
+  document.getElementById('dashboard-error').classList.add('hidden');
 
   try {
-    const list = await readJson('exhibitions.json', []);
+    const { data: list } = await readJson('exhibitions.json');
     loading.classList.add('hidden');
 
     if (list.length === 0) {
@@ -222,23 +208,36 @@ async function showDashboard() {
     });
   } catch (err) {
     loading.classList.add('hidden');
-    toast('Sergiler yüklenemedi: ' + err.message, 'error');
+    document.getElementById('dashboard-error-text').textContent = 'Sergiler yüklenemedi: ' + err.message;
+    document.getElementById('dashboard-error').classList.remove('hidden');
   }
 }
 
 /* ─── EDİTÖR ─────────────────────────────────────────────── */
 
 async function showEditor(id) {
+  const generation = ++editorGeneration;
+  currentExhibition = null;
+  editorSha = null;
+  editorDirty = false;
+  imagesReady = false;
+  document.getElementById('btn-save').disabled = true;
+  document.getElementById('btn-delete-exhibition').disabled = true;
+  document.getElementById('save-status').classList.add('hidden');
   showPage('page-editor');
   document.getElementById('editor-content').classList.add('hidden');
   document.getElementById('editor-loading').classList.remove('hidden');
   document.getElementById('editor-exhibition-name').textContent = '';
 
   try {
-    currentExhibitionsList = await readJson('exhibitions.json', []);
+    const snapshot = await readJson('exhibitions.json');
+    if (generation !== editorGeneration) return;
+    currentExhibitionsList = snapshot.data;
+    editorSha = snapshot.sha;
     const ex = currentExhibitionsList.find(e => e.id === id);
     if (!ex) throw new Error('Sergi bulunamadı.');
     currentExhibition = ex;
+    document.getElementById('btn-delete-exhibition').disabled = false;
 
     document.getElementById('editor-exhibition-name').textContent = ex.name;
     document.getElementById('field-name').value = ex.name || '';
@@ -255,6 +254,7 @@ async function showEditor(id) {
 
     await loadEditorImages(false);
   } catch (err) {
+    if (generation !== editorGeneration) return;
     document.getElementById('editor-loading').classList.add('hidden');
     toast('Sergi yüklenemedi: ' + err.message, 'error');
     showDashboard();
@@ -262,13 +262,23 @@ async function showEditor(id) {
 }
 
 async function loadEditorImages(force) {
+  const generation = editorGeneration;
+  const exhibition = currentExhibition;
+  if (!exhibition) return;
+  imagesReady = false;
+  document.getElementById('btn-save').disabled = true;
+  document.getElementById('btn-drive-refresh').disabled = true;
   const loading = document.getElementById('images-loading');
   const grid = document.getElementById('images-grid');
   loading.classList.remove('hidden');
   grid.innerHTML = '';
 
   try {
-    currentDriveFiles = await fetchDriveList(currentExhibition.driveFolderId, force);
+    const files = await fetchDriveList(exhibition.driveFolderId, force);
+    if (generation !== editorGeneration) return;
+    currentDriveFiles = files;
+    imagesReady = true;
+    document.getElementById('btn-save').disabled = false;
     document.getElementById('image-count').textContent = currentDriveFiles.length + ' eser';
     loading.classList.add('hidden');
 
@@ -277,7 +287,7 @@ async function loadEditorImages(force) {
       return;
     }
 
-    const metaImages = currentExhibition.images || {};
+    const metaImages = exhibition.images || {};
     currentDriveFiles.forEach(file => {
       const m = metaImages[file.id] || {};
       const thumbUrl = file.thumbnailLink ? file.thumbnailLink.replace(/=s\d+/, '=s300') : '';
@@ -287,43 +297,47 @@ async function loadEditorImages(force) {
       item.innerHTML = `
         <img src="${thumbUrl}" alt="${escapeAttr(file.name)}" loading="lazy" />
         <div class="image-item-body">
-          <input type="text" class="title-input" placeholder="Eser başlığı (isteğe bağlı)" value="${escapeAttr(m.title || '')}" />
-          <input type="text" class="caption-input" placeholder="Kısa açıklama (isteğe bağlı)" value="${escapeAttr(m.caption || '')}" />
-          <input type="text" class="artist-input" placeholder="Öğrenci/Öğretmen adı (isteğe bağlı)" value="${escapeAttr(m.artist || '')}" />
+          <input type="text" class="title-input" maxlength="${ADMIN_LIMITS.name}" placeholder="Eser başlığı (isteğe bağlı)" value="${escapeAttr(m.title || '')}" />
+          <input type="text" class="caption-input" maxlength="${ADMIN_LIMITS.caption}" placeholder="Kısa açıklama (isteğe bağlı)" value="${escapeAttr(m.caption || '')}" />
+          <input type="text" class="artist-input" maxlength="${ADMIN_LIMITS.artist}" placeholder="Öğrenci/Öğretmen adı (isteğe bağlı)" value="${escapeAttr(m.artist || '')}" />
         </div>
       `;
       grid.appendChild(item);
     });
   } catch (err) {
+    if (generation !== editorGeneration) return;
     loading.classList.add('hidden');
     grid.innerHTML = `<p class="empty-images">Görseller yüklenemedi: ${escapeHtml(err.message)}</p>`;
+  } finally {
+    if (generation === editorGeneration) document.getElementById('btn-drive-refresh').disabled = false;
   }
 }
 
-document.getElementById('btn-drive-refresh').addEventListener('click', () => loadEditorImages(true));
+document.getElementById('btn-drive-refresh').addEventListener('click', () => {
+  if (editorDirty) { toast('Yenilemeden önce değişikliklerinizi kaydedin.', 'error'); return; }
+  if (!busy) loadEditorImages(true);
+});
 
 /* ─── KAYDET ─────────────────────────────────────────────── */
 
 document.getElementById('btn-save').addEventListener('click', async () => {
-  if (!currentExhibition) return;
+  if (!currentExhibition || !imagesReady || busy || !editorSha) return;
 
   const btn = document.getElementById('btn-save');
-  btn.disabled = true;
+  setBusy(true);
   btn.textContent = 'Kaydediliyor…';
+  const status = document.getElementById('save-status');
+  status.classList.remove('hidden');
+  status.textContent = 'Kaydediliyor…';
 
   try {
-    const images = {};
+    const rows = [];
     document.querySelectorAll('#images-grid .image-item').forEach(item => {
       const fileId = item.dataset.fileId;
       const title = item.querySelector('.title-input').value.trim();
       const caption = item.querySelector('.caption-input').value.trim();
       const artist = item.querySelector('.artist-input').value.trim();
-      if (title || caption || artist) {
-        images[fileId] = {};
-        if (title) images[fileId].title = title;
-        if (caption) images[fileId].caption = caption;
-        if (artist) images[fileId].artist = artist;
-      }
+      rows.push({ id: fileId, title, caption, artist });
     });
 
     const name = document.getElementById('field-name').value.trim();
@@ -331,24 +345,22 @@ document.getElementById('btn-save').addEventListener('click', async () => {
     const year = document.getElementById('field-year').value.trim();
     const klass = document.getElementById('field-class').value.trim();
 
-    currentExhibition.name = name || currentExhibition.name;
-    if (description) currentExhibition.description = description; else delete currentExhibition.description;
-    if (year) currentExhibition.year = year; else delete currentExhibition.year;
-    if (klass) currentExhibition.class = klass; else delete currentExhibition.class;
-    currentExhibition.images = images;
-
-    await ghPut(
-      'exhibitions.json',
-      JSON.stringify(currentExhibitionsList, null, 2),
-      `Yönetim: ${currentExhibition.id} güncellendi`
-    );
+    if (!name) throw new Error('Sergi adı boş olamaz.');
+    const updated = GalleryAdminState.updateExhibition(currentExhibition, { name, description, year, class: klass }, rows);
+    const list = currentExhibitionsList.map(ex => ex.id === updated.id ? updated : ex);
+    const result = await saveJson('exhibitions.json', list, editorSha);
+    currentExhibition = updated;
+    currentExhibitionsList = list;
+    editorSha = result.sha;
+    editorDirty = false;
 
     document.getElementById('editor-exhibition-name').textContent = currentExhibition.name;
-    toast('Kaydedildi. Galeri birkaç saniye içinde güncellenir.');
+    status.textContent = 'GitHub’a kaydedildi. Canlı görünüm, yayın tamamlandığında güncellenir.';
   } catch (err) {
+    status.textContent = 'Kayıt hatası: ' + err.message;
     toast('Kayıt hatası: ' + err.message, 'error');
   } finally {
-    btn.disabled = false;
+    setBusy(false);
     btn.textContent = 'Kaydet';
   }
 });
@@ -356,30 +368,37 @@ document.getElementById('btn-save').addEventListener('click', async () => {
 /* ─── SERGİ SİL ──────────────────────────────────────────── */
 
 document.getElementById('btn-delete-exhibition').addEventListener('click', async () => {
-  if (!currentExhibition) return;
+  if (!currentExhibition || busy || !editorSha) return;
   const name = currentExhibition.name || currentExhibition.id;
   if (!confirm(`"${name}" sergisi siteden kaldırılsın mı?\n\nNot: Bu işlem yalnızca site bağlantısını kaldırır. Drive'daki görselleriniz silinmez.`)) return;
 
   const btn = document.getElementById('btn-delete-exhibition');
-  btn.disabled = true;
+  setBusy(true);
   btn.textContent = 'Kaldırılıyor…';
 
   try {
     const updated = currentExhibitionsList.filter(e => e.id !== currentExhibition.id);
-    await ghPut('exhibitions.json', JSON.stringify(updated, null, 2), `Yönetim: ${currentExhibition.id} kaldırıldı`);
-    toast('Sergi kaldırıldı.');
+    await saveJson('exhibitions.json', updated, editorSha);
+    toast('Kaldırma GitHub’a kaydedildi. Canlı site yayın tamamlandığında güncellenir.');
+    editorDirty = false;
+    editorGeneration++;
     currentExhibition = null;
     showDashboard();
   } catch (err) {
     toast('Silme hatası: ' + err.message, 'error');
-    btn.disabled = false;
+  } finally {
+    setBusy(false);
     btn.textContent = 'Sergiyi Sil';
   }
 });
 
 /* ─── YENİ SERGİ ─────────────────────────────────────────── */
 
+document.getElementById('btn-first-exhibition').addEventListener('click', () => document.getElementById('btn-new-exhibition').click());
+
 document.getElementById('btn-new-exhibition').addEventListener('click', () => {
+  if (busy) return;
+  newDirty = false;
   document.getElementById('new-exhibition-name').value = '';
   document.getElementById('new-exhibition-drive').value = '';
   document.getElementById('new-exhibition-description').value = '';
@@ -391,14 +410,17 @@ document.getElementById('btn-new-exhibition').addEventListener('click', () => {
 });
 
 document.getElementById('btn-modal-cancel').addEventListener('click', () => {
+  if (!mayDiscard()) return;
+  newDirty = false;
   document.getElementById('modal-new').classList.add('hidden');
 });
 
 document.getElementById('modal-new').addEventListener('click', e => {
-  if (e.target === e.currentTarget) e.currentTarget.classList.add('hidden');
+  if (e.target === e.currentTarget && mayDiscard()) { newDirty = false; e.currentTarget.classList.add('hidden'); }
 });
 
 document.getElementById('btn-modal-create').addEventListener('click', async () => {
+  if (busy) return;
   const name = document.getElementById('new-exhibition-name').value.trim();
   const driveInput = document.getElementById('new-exhibition-drive').value;
   const description = document.getElementById('new-exhibition-description').value.trim();
@@ -421,18 +443,19 @@ document.getElementById('btn-modal-create').addEventListener('click', async () =
   }
 
   const btn = document.getElementById('btn-modal-create');
-  btn.disabled = true;
+  setBusy(true);
   btn.textContent = 'Oluşturuluyor…';
 
   try {
     // Drive erişimini doğrula
     await fetchDriveList(folderId, true);
 
-    const list = await readJson('exhibitions.json', []);
+    const { data: list, sha } = await readJson('exhibitions.json');
     const existingIds = new Set(list.map(e => e.id));
-    let id = slugify(name) || 'sergi';
+    const baseId = slugify(name).replace(/^-+|-+$/g, '').replace(/-+/g, '-') || 'sergi';
+    let id = baseId;
     let suffix = 2;
-    while (existingIds.has(id)) { id = slugify(name) + '-' + suffix; suffix++; }
+    while (existingIds.has(id)) { id = baseId + '-' + suffix; suffix++; }
 
     const newEx = { id, name, driveFolderId: folderId, images: {} };
     if (description) newEx.description = description;
@@ -440,16 +463,18 @@ document.getElementById('btn-modal-create').addEventListener('click', async () =
     if (klass) newEx.class = klass;
 
     list.unshift(newEx);
-    await ghPut('exhibitions.json', JSON.stringify(list, null, 2), `Yönetim: ${name} sergisi oluşturuldu`);
+    await saveJson('exhibitions.json', list, sha);
+    newDirty = false;
 
     document.getElementById('modal-new').classList.add('hidden');
-    toast(`"${name}" sergisi oluşturuldu.`);
-    showEditor(id);
+    toast(`"${name}" GitHub’a kaydedildi. Canlı site yayın tamamlandığında güncellenir.`);
+    setBusy(false);
+    await showEditor(id);
   } catch (err) {
     errEl.textContent = 'Oluşturma hatası: ' + err.message;
     errEl.classList.remove('hidden');
   } finally {
-    btn.disabled = false;
+    if (busy) setBusy(false);
     btn.textContent = 'Oluştur';
   }
 });
@@ -457,14 +482,22 @@ document.getElementById('btn-modal-create').addEventListener('click', async () =
 /* ─── NAVİGASYON ─────────────────────────────────────────── */
 
 document.getElementById('btn-back').addEventListener('click', () => {
+  if (!mayDiscard()) return;
+  editorDirty = false;
+  editorGeneration++;
   currentExhibition = null;
   showDashboard();
 });
 
-document.getElementById('btn-logout').addEventListener('click', () => {
-  GH = null;
+document.getElementById('btn-logout').addEventListener('click', async () => {
+  if (!mayDiscard()) return;
+  try { await apiRequest('/api/auth', { method: 'DELETE' }); }
+  catch (err) { if (err.status !== 401) { toast('Çıkış yapılamadı: ' + err.message, 'error'); return; } }
+  csrfToken = null;
+  editorDirty = settingsDirty = newDirty = false;
+  editorGeneration++;
   currentExhibition = null;
-  sessionStorage.removeItem('gh_session');
+  try { sessionStorage.removeItem('gh_session'); } catch {}
   document.getElementById('input-password').value = '';
   showPage('page-login');
 });
@@ -472,22 +505,33 @@ document.getElementById('btn-logout').addEventListener('click', () => {
 /* ─── AYARLAR ────────────────────────────────────────────── */
 
 document.getElementById('btn-settings').addEventListener('click', async () => {
+  if (busy) return;
   document.getElementById('settings-error').classList.add('hidden');
-  const config = await readJson('config.json', {});
+  let config;
+  settingsSha = null;
+  try {
+    const snapshot = await readJson('config.json');
+    config = snapshot.data;
+    settingsSha = snapshot.sha;
+  } catch (err) { toast(err.message, 'error'); return; }
+  settingsDirty = false;
   document.getElementById('settings-school-name').value = config.schoolName || '';
   document.getElementById('modal-settings').classList.remove('hidden');
   document.getElementById('settings-school-name').focus();
 });
 
 document.getElementById('btn-settings-cancel').addEventListener('click', () => {
+  if (!mayDiscard()) return;
+  settingsDirty = false;
   document.getElementById('modal-settings').classList.add('hidden');
 });
 
 document.getElementById('modal-settings').addEventListener('click', e => {
-  if (e.target === e.currentTarget) e.currentTarget.classList.add('hidden');
+  if (e.target === e.currentTarget && mayDiscard()) { settingsDirty = false; e.currentTarget.classList.add('hidden'); }
 });
 
 document.getElementById('btn-settings-save').addEventListener('click', async () => {
+  if (busy || !settingsSha) return;
   const schoolName = document.getElementById('settings-school-name').value.trim();
   const errEl = document.getElementById('settings-error');
   errEl.classList.add('hidden');
@@ -499,18 +543,20 @@ document.getElementById('btn-settings-save').addEventListener('click', async () 
   }
 
   const btn = document.getElementById('btn-settings-save');
-  btn.disabled = true;
+  setBusy(true);
   btn.textContent = 'Kaydediliyor…';
 
   try {
-    await ghPut('config.json', JSON.stringify({ schoolName }, null, 2), 'Yönetim: okul adı güncellendi');
+    const result = await saveJson('config.json', { schoolName }, settingsSha);
+    settingsSha = result.sha;
+    settingsDirty = false;
     document.getElementById('modal-settings').classList.add('hidden');
-    toast('Ayarlar kaydedildi. Galeri birkaç saniye içinde güncellenir.');
+    toast('Ayarlar GitHub’a kaydedildi. Canlı site yayın tamamlandığında güncellenir.');
   } catch (err) {
     errEl.textContent = 'Kayıt hatası: ' + err.message;
     errEl.classList.remove('hidden');
   } finally {
-    btn.disabled = false;
+    setBusy(false);
     btn.textContent = 'Kaydet';
   }
 });
@@ -522,14 +568,14 @@ document.getElementById('btn-embed').addEventListener('click', async () => {
   while (select.options.length > 1) select.remove(1);
 
   try {
-    const list = await readJson('exhibitions.json', []);
+    const { data: list } = await readJson('exhibitions.json');
     list.forEach(ex => {
       const opt = document.createElement('option');
       opt.value = ex.id;
       opt.textContent = ex.name;
       select.appendChild(opt);
     });
-  } catch (e) {}
+  } catch (err) { toast(err.message, 'error'); return; }
 
   updateEmbedCode();
   document.getElementById('modal-embed').classList.remove('hidden');
@@ -573,14 +619,18 @@ document.getElementById('modal-embed').addEventListener('click', e => {
 
 /* ─── BAŞLAT ─────────────────────────────────────────────── */
 
-const savedSession = sessionStorage.getItem('gh_session');
-if (savedSession) {
-  try {
-    GH = JSON.parse(savedSession);
-    showDashboard();
-  } catch {
-    showPage('page-login');
-  }
-} else {
-  showPage('page-login');
-}
+// Eski sürümden kalan token'ı okumadan temizle.
+try { sessionStorage.removeItem('gh_session'); } catch {}
+document.getElementById('btn-dashboard-retry').addEventListener('click', () => { if (!busy) showDashboard(); });
+document.getElementById('btn-login').disabled = true;
+apiRequest('/api/auth').then(session => {
+  csrfToken = session.csrf;
+  showDashboard();
+}).catch(() => showPage('page-login')).finally(() => { document.getElementById('btn-login').disabled = false; });
+
+const fieldLimits = {
+  'field-name': 'name', 'field-description': 'description', 'field-year': 'year', 'field-class': 'class',
+  'new-exhibition-name': 'name', 'new-exhibition-description': 'description', 'new-exhibition-year': 'year',
+  'new-exhibition-class': 'class', 'settings-school-name': 'name'
+};
+for (const [id, limit] of Object.entries(fieldLimits)) document.getElementById(id).maxLength = ADMIN_LIMITS[limit];

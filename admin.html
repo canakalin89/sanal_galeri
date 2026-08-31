@@ -58,11 +58,16 @@
       <p>Sergiler yükleniyor…</p>
     </div>
 
+    <div id="dashboard-error" class="error-msg hidden" role="alert">
+      <p id="dashboard-error-text"></p>
+      <button id="btn-dashboard-retry" class="btn-ghost">Yeniden dene</button>
+    </div>
+
     <div id="dashboard-empty" class="empty-state hidden">
       <span class="empty-state-icon">&#9729;</span>
       <p>Henüz sergi yok.</p>
       <p class="empty-state-sub">Bir Google Drive klasörü bağlayarak ilk serginizi oluşturun.</p>
-      <button class="btn-primary" onclick="document.getElementById('btn-new-exhibition').click()">İlk sergiyi oluştur</button>
+      <button class="btn-primary" id="btn-first-exhibition">İlk sergiyi oluştur</button>
     </div>
 
     <div id="exhibitions-grid" class="hidden"></div>
@@ -81,6 +86,7 @@
       </div>
     </div>
 
+    <p id="save-status" role="status" aria-live="polite" class="hidden"></p>
     <div id="editor-loading" class="loading-state">
       <div class="spinner"></div>
       <p>Sergi yükleniyor…</p>
@@ -233,6 +239,8 @@
   <!-- BİLDİRİM -->
   <div id="toast" class="toast hidden"></div>
 
+  <script src="admin-limits.js"></script>
+  <script src="admin-state.js"></script>
   <script src="admin-app.js"></script>
 </body>
 </html>
