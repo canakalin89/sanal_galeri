@@ -96,6 +96,13 @@
       <button id="btn-3d" class="btn-3d hidden">&#127963; 3D Salonda Gez</button>
     </div>
     <p id="gallery-desc" class="gallery-desc hidden"></p>
+    <div class="gallery-filters hidden" id="gallery-filters">
+      <label>Eser ara<input id="artwork-search" type="search" maxlength="160" placeholder="Başlık, sanatçı veya açıklama…" /></label>
+      <label>Sanatçı<select id="artist-filter"><option value="">Tüm sanatçılar</option></select></label>
+      <button id="filters-clear" type="button">Filtreleri temizle</button>
+      <span id="filter-count" role="status" aria-live="polite"></span>
+    </div>
+    <p id="artwork-notice" class="artwork-notice hidden" role="status"></p>
     <main class="masonry-grid" id="gallery"></main>
   </div>
 
@@ -124,6 +131,12 @@
 
     <!-- Sol alt: kontrol rehberi (kalıcı) -->
     <div class="gal3d-hint hidden" id="gal3d-hint"></div>
+    <div class="gal3d-artwork-picker hidden" id="gal3d-artwork-picker">
+      <label for="gal3d-artwork-select">Eser seç</label>
+      <select id="gal3d-artwork-select"></select>
+      <button id="gal3d-inspect" type="button">İncele</button>
+    </div>
+    <div class="gal3d-aim hidden" id="gal3d-aim" aria-hidden="true">+</div>
 
     <!-- Alt orta: mini harita -->
     <div class="gal3d-minimap-wrap hidden" id="gal3d-minimap-wrap">
@@ -153,6 +166,12 @@
       <span class="lb-caption" id="lb-caption"></span>
       <span class="lb-artist" id="lb-artist"></span>
       <span class="lb-counter" id="lb-counter"></span>
+      <div class="artwork-share">
+        <label for="artwork-share-url">Eser bağlantısı</label>
+        <input id="artwork-share-url" type="text" readonly />
+        <button id="artwork-copy" type="button">Bağlantıyı kopyala</button>
+        <span id="artwork-share-status" role="status" aria-live="polite"></span>
+      </div>
     </div>
   </div>
 
@@ -200,6 +219,7 @@
     document.getElementById('footer-year').textContent = new Date().getFullYear();
   </script>
   <script src="gallery-data.js"></script>
+  <script src="artwork-tools.js"></script>
   <script src="script.js"></script>
   <script>
     (function () {

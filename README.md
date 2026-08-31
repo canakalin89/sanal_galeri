@@ -147,6 +147,7 @@ birlikte güncelleyin.
 
 - index.html / style.css / script.js: ziyaretçi galerisi ve büyük görsel penceresi
 - gallery-data.js: ziyaretçi yanıt doğrulaması, ortak istekler ve kısa önbellek
+- artwork-tools.js: Türkçe arama, sanatçı filtresi ve kalıcı eser bağlantıları
 - gallery3d.js / vendor/: 3D salon, yerel Three.js ve modeller
 - admin.html / admin-app.js / admin-state.js: yönetim arayüzü ve veri koruma
 - api/auth.js: giriş, oturum sorgusu, çıkış
@@ -169,7 +170,25 @@ Salon yüklenirken de kapatılabilir. Kapanışta kontroller ve sahne kaynaklar�
 temizlenir; geç tamamlanan yüklemeler kapatılan salona uygulanmaz. Model
 çözücü, varsa devam eden işleri tamamlanınca serbest bırakılır.
 Karşılama panosunun başlangıç genişliği ekranın görüş alanına göre sınırlandırılır.
-Esere tıklayıp yaklaşma/bilgi kartı henüz uygulanmış değildir.
+3D salonda görünür esere tıklamak/dokunmak büyük görsel, başlık, açıklama,
+sanatçı ve paylaşım bağlantısını açar. Fare kilitliyken ekran merkezindeki
+işaret kullanılır. Eser seç listesinden İncele düğmesiyle de aynı pencere açılır.
+Kart açıkken yürüyüş/bakış durur; ESC kartı kapatıp aynı salon konumuna döner.
+Kamera esere otomatik yaklaşmaz.
+
+Galerideki arama başlık, açıklama, sanatçı ve Drive dosya adını tarar; Türkçe
+ve aksansız yazımlar desteklenir. Sanatçı filtresi aramayla birlikte çalışır.
+Sonuç sayısı gösterilir; Filtreleri temizle bütün eserleri geri getirir.
+3D salon ve büyük görselde önceki/sonraki gezinmesi seçili sonuçlarla sınırlıdır.
+
+Eser bağlantıları #sergi-kimliği?eser=DRIVE_DOSYA_KIMLIGI biçimindedir;
+eserin sırası değişse de aynı dosyayı açar. Bağlantıyla açılışta filtreler
+temizlenir ve eser doğrudan gösterilir. Silinmiş/kaldırılmış dosya için uyarı
+görünür. Dosya başka kimlikle yeniden yüklenirse veya sergi kimliği değiştirilirse
+eski bağlantı artık o eseri açamaz.
+Bağlantıyı kopyala düğmesi panoyu kullanır; izin yoksa seçilebilir adres sunar.
+Paylaşım adresinden embed ve diğer sorgu parametreleri kaldırılır. Kartı
+kapatmak adresi sergiye döndürür; kartlar arasında gezinme geçmişi şişirmez.
 
 Görsel penceresinde yükleme/hata durumu ve Tekrar dene düğmesi bulunur.
 Eser açıklamaları ayrı, kaydırılabilir alandadır; dikey kaydırma eser değiştirmez.

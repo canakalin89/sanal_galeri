@@ -48,6 +48,8 @@
 
   const state = {
     active: false,
+    inspecting: false,
+    gestureMoved: false,
     images: [],
     frames: [],           // { mesh, img, plaqueGroup }
     keys: {},
@@ -947,9 +949,48 @@
 
   /* ─── KONTROLLER ─────────────────────────────────────────── */
 
+  function inspectArtwork(index) {
+    if (!state.active || state.inspecting || !state.images[index]) return;
+    const run = session;
+    state.inspecting = true;
+    resetControls();
+    if (document.pointerLockElement === el('gal3d-canvas-container')) document.exitPointerLock();
+    window.showGalleryArtwork(state.images, index, run.exhibitionName, () => {
+      if (isCurrent(run)) { state.inspecting = false; resetControls(); }
+    });
+  }
+
+  function pickArtwork(event) {
+    if (state.inspecting || state.gestureMoved || !camera) return false;
+    const container = el('gal3d-canvas-container');
+    const bounds = container.getBoundingClientRect();
+    const pointer = document.pointerLockElement === container ? new THREE.Vector2(0, 0)
+      : new THREE.Vector2((event.clientX - bounds.left) / bounds.width * 2 - 1, -(event.clientY - bounds.top) / bounds.height * 2 + 1);
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(pointer, camera);
+    // İlk yüzey seçilir; duvarın/panonun arkasındaki eser tıklanamaz.
+    scene.updateMatrixWorld(true);
+    const index = ArtworkTools.pickedArtworkIndex(ray.intersectObjects(scene.children, true), state.images);
+    if (index < 0) return false;
+    inspectArtwork(index);
+    return true;
+  }
+
+  function setupArtworkPicker() {
+    const select = el('gal3d-artwork-select');
+    select.replaceChildren();
+    state.images.forEach((image, index) => {
+      select.add(new Option((index + 1) + '. ' + (image.title || image.artist || 'Eser ' + (index + 1)), String(index)));
+    });
+    el('gal3d-artwork-picker').classList.remove('hidden');
+    el('gal3d-aim').classList.toggle('hidden', state.isMobile);
+    listen(el('gal3d-inspect'), 'click', () => inspectArtwork(Number(select.value)));
+  }
+
   function setupDesktopControls(container) {
     const run = session;
-    listen(container, 'click', () => {
+    listen(container, 'click', event => {
+      if (state.gestureMoved || state.inspecting || pickArtwork(event)) return;
       try {
         container.requestPointerLock?.()?.catch(() => {
           if (isCurrent(run)) el('gal3d-hint').textContent = 'Fare kilidi kullanılamıyor. Bakmak için sürükleyin; yürümek için WASD / ok tuşlarını kullanın.';
@@ -958,7 +999,7 @@
     });
 
     listen(document, 'mousemove', e => {
-      if (document.pointerLockElement !== container) return;
+      if (state.inspecting || document.pointerLockElement !== container) return;
       state.yaw -= e.movementX * 0.0022;
       state.pitch -= e.movementY * 0.0022;
       state.pitch = Math.max(-1.2, Math.min(1.2, state.pitch));
@@ -966,6 +1007,7 @@
 
     const movementKeys = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
     listen(window, 'keydown', e => {
+      if (state.inspecting || e.target.matches('input, select, textarea')) return;
       if (movementKeys.has(e.code)) { e.preventDefault(); state.keys[e.code] = true; }
     });
     listen(window, 'keyup', e => { state.keys[e.code] = false; });
@@ -981,7 +1023,7 @@
     if (!joyBase) return;
 
     listen(joyBase, 'pointerdown', e => {
-      if (state.joystick.active) return;
+      if (state.inspecting || state.joystick.active) return;
       joyBase.setPointerCapture(e.pointerId);
       state.joystick.active = true;
       state.joystick.pointerId = e.pointerId;
@@ -1011,21 +1053,26 @@
     }
     for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) listen(joyBase, type, resetJoystick);
     setupLookControls(container);
+    listen(container, 'click', pickArtwork);
   }
 
   function setupLookControls(container) {
     // Her parmak kendi pointerId değeriyle takip edilir; joystick ile karışmaz.
     listen(container, 'pointerdown', e => {
-      if (state.lookTouch.active || document.pointerLockElement === container) return;
+      state.gestureMoved = false;
+      if (state.inspecting || state.lookTouch.active || document.pointerLockElement === container) return;
       container.setPointerCapture(e.pointerId);
       state.lookTouch.active = true;
       state.lookTouch.pointerId = e.pointerId;
       state.lookTouch.lastX = e.clientX;
       state.lookTouch.lastY = e.clientY;
+      state.lookTouch.startX = e.clientX;
+      state.lookTouch.startY = e.clientY;
     });
 
     listen(container, 'pointermove', e => {
-      if (!state.lookTouch.active || e.pointerId !== state.lookTouch.pointerId || document.pointerLockElement === container) return;
+      if (state.inspecting || !state.lookTouch.active || e.pointerId !== state.lookTouch.pointerId || document.pointerLockElement === container) return;
+      if (Math.hypot(e.clientX - state.lookTouch.startX, e.clientY - state.lookTouch.startY) > 6) state.gestureMoved = true;
       const dx = e.clientX - state.lookTouch.lastX;
       const dy = e.clientY - state.lookTouch.lastY;
       state.yaw -= dx * 0.0035;
@@ -1046,6 +1093,7 @@
   /* ─── HAREKET ────────────────────────────────────────────── */
 
   function updateMovement(dt) {
+    if (state.inspecting) return;
     const speed = 3.2;
     let moveX = 0, moveZ = 0;
 
@@ -1155,12 +1203,16 @@
     const loading = el('gal3d-loading');
     if (!overlay || !container) return;
 
-    const run = { controller: new AbortController(), roots: new Set(), pendingModels: 0 };
+    const run = { controller: new AbortController(), roots: new Set(), pendingModels: 0, exhibitionName };
     session = run;
     state.active = true;
+    state.inspecting = false;
+    state.gestureMoved = false;
     resetControls();
     overlay.classList.remove('hidden');
     loading.classList.remove('hidden');
+    el('gal3d-artwork-picker').classList.add('hidden');
+    el('gal3d-aim').classList.add('hidden');
     run.releaseModal = window.activateGalleryModal(overlay);
     listen(window, 'keydown', escListener);
     listen(window, 'blur', resetControls);
@@ -1180,8 +1232,8 @@
       el('gal3d-joystick').classList.toggle('hidden', !state.isMobile);
       // Kontrol ipucu artık kalıcı bir HUD — otomatik kaybolmuyor
       el('gal3d-hint').innerHTML = state.isMobile
-        ? '<strong>Yürü:</strong> Sol çubuk &nbsp; <strong>Bak:</strong> Ekranı sürükle'
-        : '<strong>Yürü:</strong> WASD / Ok tuşları &nbsp; <strong>Bak:</strong> Fare / Sürükle &nbsp; <strong>Çık:</strong> ESC';
+        ? '<strong>Yürü:</strong> Sol çubuk &nbsp; <strong>Bak:</strong> Sürükle &nbsp; <strong>Eser:</strong> Dokun'
+        : '<strong>Yürü:</strong> WASD / Ok tuşları &nbsp; <strong>Bak:</strong> Fare / Sürükle &nbsp; <strong>Eser:</strong> Tıkla &nbsp; <strong>Çık:</strong> ESC';
       el('gal3d-hint').classList.remove('hidden');
       el('gal3d-minimap-wrap').classList.remove('hidden');
       const schoolName = typeof SCHOOL_NAME !== 'undefined' ? SCHOOL_NAME : 'Sanal Sergi';
@@ -1202,6 +1254,7 @@
         setupDesktopControls(container);
       }
 
+      setupArtworkPicker();
       listen(window, 'resize', () => onResize(container));
 
       clock = new THREE.Clock();
@@ -1215,7 +1268,7 @@
   }
 
   function escListener(e) {
-    if (e.code === 'Escape') closeGallery3D();
+    if (e.code === 'Escape' && !state.inspecting) closeGallery3D();
   }
 
   function closeGallery3D() {

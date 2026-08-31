@@ -15,6 +15,8 @@ async function resolveDriveExhibitionImages(ex, force = false) {
   return files.map(f => {
     const m = metaImages[f.id] || {};
     return {
+      id: f.id,
+      fileName: f.name || '',
       src: driveImgUrl(f.id, 1600),
       thumbSrc: driveImgUrl(f.id, 480),
       title: m.title || null,
@@ -31,6 +33,9 @@ let exhibitionsReady = false;
 let galleryViewVersion = 0;
 let routeVersion = 0;
 let coverObserver = null;
+let activeExhibition = null;
+let galleryImages = [];
+let filteredImages = [];
 
 async function loadExhibitionsMeta() {
   ALL_EXHIBITIONS = await galleryData.getCatalog();
@@ -47,7 +52,7 @@ async function route() {
   const version = ++routeVersion;
   galleryViewVersion++;
   coverObserver?.disconnect();
-  closeLightbox();
+  closeLightbox(false);
   window.closeGallery3D?.();
   try {
     if (!exhibitionsReady) await loadExhibitionsMeta();
@@ -57,11 +62,11 @@ async function route() {
     return;
   }
   if (version !== routeVersion) return;
-  const id = location.hash.slice(1);
-  const exhibition = id ? findExhibitionMeta(id) : null;
+  const { id, artworkId, invalid } = ArtworkTools.parseRoute(location.hash);
+  const exhibition = id && !invalid ? findExhibitionMeta(id) : null;
   if (exhibition) {
-    showGallery(exhibition);
-  } else if (id) {
+    showGallery(exhibition, false, artworkId);
+  } else if (id || invalid) {
     showHome(null, true);
   } else {
     showHome();
@@ -200,8 +205,17 @@ function showHome(error = null, missing = false) {
 
 /* ─── GALERİ SAYFASI ─────────────────────────────────────── */
 
-async function showGallery(exhibition, force = false) {
+async function showGallery(exhibition, force = false, artworkId = null) {
   const version = ++galleryViewVersion;
+  activeExhibition = exhibition;
+  galleryImages = [];
+  filteredImages = [];
+  document.getElementById('gallery-filters').classList.add('hidden');
+  document.getElementById('artwork-notice').classList.add('hidden');
+  if (!force) {
+    document.getElementById('artwork-search').value = '';
+    document.getElementById('artist-filter').value = '';
+  }
   coverObserver?.disconnect();
   document.getElementById('view-home').classList.add('hidden');
   document.getElementById('view-gallery').classList.remove('hidden');
@@ -221,7 +235,7 @@ async function showGallery(exhibition, force = false) {
   countEl.textContent = '';
   const refresh = document.getElementById('btn-refresh');
   refresh.disabled = true;
-  refresh.onclick = () => showGallery(exhibition, true);
+  refresh.onclick = () => showGallery(exhibition, true, ArtworkTools.parseRoute(location.hash).artworkId);
 
   const btn3d = document.getElementById('btn-3d');
   btn3d.classList.add('hidden');
@@ -237,7 +251,7 @@ async function showGallery(exhibition, force = false) {
   } catch (err) {
     if (version !== galleryViewVersion) return;
     refresh.disabled = false;
-    showMessage(grid, 'Sergi yüklenemedi', err.message, () => showGallery(exhibition, true));
+    showMessage(grid, 'Sergi yüklenemedi', err.message, () => showGallery(exhibition, true, artworkId));
     if (force) refresh.focus({ preventScroll: true });
     return;
   }
@@ -249,17 +263,67 @@ async function showGallery(exhibition, force = false) {
   grid.innerHTML = '';
 
   if (images.length === 0) {
-    showMessage(grid, 'Bu sergide henüz eser yok.', 'Yeni eserler eklendiyse listeyi yenileyebilirsiniz.', () => showGallery(exhibition, true), 'Eserleri yenile');
+    showMessage(grid, artworkId ? 'Bağlantıdaki eser bu sergide bulunamadı.' : 'Bu sergide henüz eser yok.', 'Yeni eserler eklendiyse listeyi yenileyebilirsiniz.', () => showGallery(exhibition, true, artworkId), 'Eserleri yenile');
     return;
   }
 
-  grid.classList.remove('gallery-state');
-  btn3d.classList.remove('hidden');
-  btn3d.onclick = () => open3DGallery(images, exhibition.name, exhibition.description);
+  galleryImages = images;
+  const artistSelect = document.getElementById('artist-filter');
+  const previousArtist = artistSelect.value;
+  artistSelect.replaceChildren(new Option('Tüm sanatçılar', ''));
+  ArtworkTools.artists(images).forEach(artist => artistSelect.add(new Option(artist, artist)));
+  if ([...artistSelect.options].some(option => option.value === previousArtist)) artistSelect.value = previousArtist;
+  document.getElementById('gallery-filters').classList.remove('hidden');
+  applyArtworkFilters();
+  if (artworkId) {
+    const index = images.findIndex(image => image.id === artworkId);
+    if (index >= 0) {
+      lastFocusedItem = grid.querySelector('[data-artwork-id="' + artworkId + '"]');
+      openLightbox(images, index, exhibition.name);
+    } else {
+      const notice = document.getElementById('artwork-notice');
+      notice.textContent = 'Bağlantıdaki eser artık bu sergide bulunmuyor. Diğer eserleri inceleyebilirsiniz.';
+      notice.classList.remove('hidden');
+    }
+  }
+}
+
+function applyArtworkFilters() {
+  if (!activeExhibition) return;
+  const query = document.getElementById('artwork-search').value;
+  const artist = document.getElementById('artist-filter').value;
+  filteredImages = ArtworkTools.filterImages(galleryImages, query, artist);
+  document.getElementById('filter-count').textContent = filteredImages.length + ' / ' + galleryImages.length + ' eser';
+  const btn3d = document.getElementById('btn-3d');
+  btn3d.classList.toggle('hidden', filteredImages.length === 0);
+  btn3d.onclick = () => open3DGallery(filteredImages, activeExhibition.name, activeExhibition.description);
+  renderGalleryImages(filteredImages, activeExhibition);
+}
+
+function clearArtworkFilters() {
+  document.getElementById('artwork-search').value = '';
+  document.getElementById('artist-filter').value = '';
+  applyArtworkFilters();
+  document.getElementById('artwork-search').focus();
+}
+
+document.getElementById('artwork-search').addEventListener('input', applyArtworkFilters);
+document.getElementById('artist-filter').addEventListener('change', applyArtworkFilters);
+document.getElementById('filters-clear').addEventListener('click', clearArtworkFilters);
+
+function renderGalleryImages(images, exhibition) {
+  const grid = document.getElementById('gallery');
+  grid.replaceChildren();
+  grid.classList.toggle('gallery-state', images.length === 0);
+  if (!images.length) {
+    showMessage(grid, 'Eşleşen eser bulunamadı.', 'Başka bir arama deneyin veya filtreleri temizleyin.', clearArtworkFilters, 'Filtreleri temizle');
+    return;
+  }
 
   images.forEach((img, i) => {
     const el = document.createElement('div');
     el.className = 'gallery-item';
+    el.dataset.artworkId = img.id;
     el.setAttribute('tabindex', '0');
     el.setAttribute('role', 'button');
     el.style.animationDelay = Math.min(i * 0.03, 0.6) + 's';
@@ -306,9 +370,13 @@ let currentExName = '';
 let lastFocusedItem = null;
 let releaseLightbox = null;
 let lightboxLoad = 0;
+let currentExId = '';
+let onArtworkClosed = null;
 
 // Pencere dışını geçici olarak devre dışı bırakır; kapanınca önceki odağı geri verir.
 window.activateGalleryModal = function (dialog) {
+  const previousInert = dialog.inert;
+  dialog.inert = false;
   const previousFocus = document.activeElement;
   const previousOverflow = document.body.style.overflow;
   const siblings = [...document.body.children].filter(node => node !== dialog);
@@ -316,7 +384,7 @@ window.activateGalleryModal = function (dialog) {
   siblings.forEach(node => { node.inert = true; });
   document.body.style.overflow = 'hidden';
   const controller = new AbortController();
-  const controls = () => [...dialog.querySelectorAll('button, [href], [tabindex="0"]')]
+  const controls = () => [...dialog.querySelectorAll('button, input, select, [href], [tabindex="0"]')]
     .filter(node => !node.disabled && node.getClientRects().length);
   dialog.addEventListener('keydown', event => {
     if (event.key !== 'Tab') return;
@@ -331,6 +399,7 @@ window.activateGalleryModal = function (dialog) {
   return () => {
     controller.abort();
     siblings.forEach((node, index) => { node.inert = inertStates[index]; });
+    dialog.inert = previousInert;
     document.body.style.overflow = previousOverflow;
     if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
   };
@@ -338,6 +407,9 @@ window.activateGalleryModal = function (dialog) {
 
 function updateLightboxImage() {
   const img = currentImages[currentIndex];
+  document.getElementById('artwork-share-url').value = ArtworkTools.shareUrl(location.href, currentExId, img.id);
+  document.getElementById('artwork-share-status').textContent = '';
+  history.replaceState(null, '', ArtworkTools.artworkHash(currentExId, img.id));
   const lbImg = document.getElementById('lb-img');
   const status = document.getElementById('lb-status');
   const request = ++lightboxLoad;
@@ -366,24 +438,47 @@ function updateLightboxImage() {
   document.getElementById('lb-next').disabled = currentImages.length < 2;
 }
 
-function openLightbox(images, index, exhibitionName) {
+function openLightbox(images, index, exhibitionName, onClose = null) {
   if (!images.length) return;
   currentImages = images;
   currentIndex  = index;
   currentExName = exhibitionName || '';
+  currentExId = activeExhibition.id;
+  onArtworkClosed = onClose;
   updateLightboxImage();
   document.getElementById('lightbox').classList.add('open');
   if (!releaseLightbox) releaseLightbox = window.activateGalleryModal(document.getElementById('lightbox'));
 }
 
-function closeLightbox() {
+function closeLightbox(updateUrl = true) {
   if (!releaseLightbox) return;
   lightboxLoad++;
   document.getElementById('lightbox').classList.remove('open');
   releaseLightbox();
   releaseLightbox = null;
-  if (lastFocusedItem?.isConnected) lastFocusedItem.focus({ preventScroll: true });
+  if (updateUrl) history.replaceState(null, '', '#' + currentExId);
+  const callback = onArtworkClosed;
+  onArtworkClosed = null;
+  if (callback) callback();
+  else if (lastFocusedItem?.isConnected) lastFocusedItem.focus({ preventScroll: true });
 }
+
+window.showGalleryArtwork = openLightbox;
+
+document.getElementById('artwork-share-url').addEventListener('click', event => event.target.select());
+document.getElementById('artwork-copy').addEventListener('click', async () => {
+  const field = document.getElementById('artwork-share-url');
+  const link = field.value;
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error('Pano kullanılamıyor');
+    await navigator.clipboard.writeText(link);
+    if (field.value === link && releaseLightbox) document.getElementById('artwork-share-status').textContent = 'Bağlantı kopyalandı.';
+  } catch {
+    if (field.value !== link || !releaseLightbox) return;
+    field.focus(); field.select();
+    document.getElementById('artwork-share-status').textContent = 'Otomatik kopyalama kullanılamıyor. Seçili bağlantıyı elle kopyalayabilirsiniz.';
+  }
+});
 
 function prev() {
   currentIndex = (currentIndex - 1 + currentImages.length) % currentImages.length;
@@ -403,6 +498,8 @@ document.getElementById('lb-retry').addEventListener('click', updateLightboxImag
 
 document.addEventListener('keydown', e => {
   if (!document.getElementById('lightbox').classList.contains('open')) return;
+  e.stopPropagation(); // 3D salon açıkken ESC yalnızca eser kartını kapatır.
+  if (e.key !== 'Escape' && e.target.matches('input, textarea, select')) return;
   if (['Escape', 'ArrowLeft', 'ArrowRight'].includes(e.key)) e.preventDefault();
   if (e.key === 'Escape')     closeLightbox();
   if (e.key === 'ArrowLeft')  prev();
@@ -454,7 +551,7 @@ async function open3DGallery(images, exhibitionName, exhibitionDescription) {
   btn.textContent = 'Yükleniyor…';
   try {
     await loadGallery3DScript();
-    if (location.hash !== openingHash) return;
+    if (location.hash !== openingHash || images !== filteredImages) return;
     // Modal odağı kapanışta dönebilsin; yükleme boyunca düğme zaten arka planda inert olur.
     btn.disabled = false;
     await window.openGallery3D(images, exhibitionName, exhibitionDescription);
