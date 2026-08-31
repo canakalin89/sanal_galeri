@@ -2,9 +2,12 @@
   "name": "sanal-galeri",
   "version": "1.0.0",
   "scripts": {
-    "build": "node build.js"
+    "build": "node build.js",
+    "test": "node --test tests/*.test.js",
+    "lint": "node scripts/check.js"
   },
   "dependencies": {
+    "@vercel/firewall": "1.2.5",
     "playwright": "^1.61.1"
   }
 }

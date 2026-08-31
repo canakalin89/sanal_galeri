@@ -75,6 +75,10 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+function escapeAttr(str) {
+  return escapeHtml(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 function makeLabel(img, exhibitionName, index) {
   if (img.title) return img.title;
   if (img.artist) return exhibitionName + ' — ' + img.artist;
@@ -127,7 +131,7 @@ async function showHome() {
         thumbEl.classList.remove('skeleton');
         if (images.length > 0) {
           thumbEl.innerHTML =
-            '<img src="' + (images[0].thumbSrc || images[0].src) + '" alt="' + escapeHtml(ex.name) + '" loading="lazy" />' +
+            '<img src="' + (images[0].thumbSrc || images[0].src) + '" alt="' + escapeAttr(ex.name) + '" loading="lazy" />' +
             yearBadge;
         } else {
           thumbEl.innerHTML = yearBadge;
@@ -206,7 +210,7 @@ async function showGallery(exhibition) {
     }
 
     el.innerHTML =
-      '<img src="' + (img.thumbSrc || img.src) + '" alt="' + escapeHtml(label) + '" loading="lazy" />' +
+      '<img src="' + (img.thumbSrc || img.src) + '" alt="' + escapeAttr(label) + '" loading="lazy" />' +
       overlayHtml;
 
     el.addEventListener('click', () => {

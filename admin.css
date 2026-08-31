@@ -46,6 +46,16 @@ body {
   min-height: 100vh;
 }
 
+#save-status, #dashboard-error {
+  max-width: 1000px;
+  margin: 1rem auto;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  white-space: pre-wrap;
+}
+
 .hidden { display: none !important; }
 
 :focus-visible { outline: 2px solid var(--cyan-500); outline-offset: 2px; }
