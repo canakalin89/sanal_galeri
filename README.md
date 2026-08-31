@@ -148,7 +148,9 @@ birlikte güncelleyin.
 - index.html / style.css / script.js: ziyaretçi galerisi ve büyük görsel penceresi
 - gallery-data.js: ziyaretçi yanıt doğrulaması, ortak istekler ve kısa önbellek
 - artwork-tools.js: Türkçe arama, sanatçı filtresi ve kalıcı eser bağlantıları
-- gallery3d.js / vendor/: 3D salon, yerel Three.js ve modeller
+- gallery3d.js: 3D oturumu, kontroller, eser dokuları ve salon geçişleri
+- gallery-layout.js / gallery-room.js: deterministik salon planı ve prosedürel mimari
+- vendor/three.module.js: yerel Three.js; eski model/çözücü dosyaları yayına alınmaz
 - admin.html / admin-app.js / admin-state.js: yönetim arayüzü ve veri koruma
 - api/auth.js: giriş, oturum sorgusu, çıkış
 - api/admin.js: sınırlı GitHub dosya okuma/kaydetme
@@ -166,13 +168,28 @@ klavye/dokunmatik büyük görsel gezinmesi ve WQXR radyo bileşeni bulunur.
 3D mod yalnızca butonla yüklenir; WASD/fare veya mobil joystick ile gezinilir.
 Fare kilidi desteklenmediğinde sürükleyerek bakılabilir. Mobilde yürüyüş ve
 bakış farklı parmaklarla birlikte kullanılabilir; çubuk hareketi yürüyüş hızını ayarlar.
-Salon yüklenirken de kapatılabilir. Kapanışta kontroller ve sahne kaynakları
-temizlenir; geç tamamlanan yüklemeler kapatılan salona uygulanmaz. Model
-çözücü, varsa devam eden işleri tamamlanınca serbest bırakılır.
-Karşılama panosunun başlangıç genişliği ekranın görüş alanına göre sınırlandırılır.
+Salon yüklenirken de kapatılabilir. Kapanışta veya salon değişiminde önceki
+eser yüklemeleri iptal edilir ve sahne kaynakları temizlenir.
+Geç tamamlanan görseller yeni salona uygulanmaz.
+
+3D mimari tamamen prosedüreldir: açık taş zemin, kırık beyaz duvarlar,
+ince koyu çerçeve/paspartu, açık meşe bant ve düzenli tavan ışık panelleri.
+Merkezde dolaşımı veya eserleri örten dekor/pano yoktur. Sergi kimliği giriş
+duvarında ve üst araç çubuğunda gösterilir; sağlanan okul logosu aynen korunur.
+Hazır GLB modelleri, Draco çözücü ve rastgele bitki/dekor kullanılmaz.
+
+Her salon en fazla 12 eserdir. Koleksiyon dengeli salonlara ayrılır
+(28 eser = 10 + 9 + 9); önceki/sonraki düğmeleri veya Salon seç ile geçilir.
+Oda boyutu yaklaşık 8–13,2 m genişlik ve 8–14,4 m derinlik arasında kalır;
+eserler üç duvarda, merkezleri 1,8 m yükseklikte, en az 2,85 m aralıklıdır.
+Yatay/dikey/kare eserler en fazla 2,1 × 2 m alana kırpılmadan sığar.
+Bir kerede yalnızca mevcut salonun eserleri, en fazla dört eşzamanlı görsel
+isteğiyle yüklenir. Görsel yüklemesi 15 saniyede kesilir; başarısız görsel
+için seçilebilir hata yüzeyi kalır. Sahnedeki üç ışık eser sayısından bağımsızdır;
+eser dokuları ton eşleme ve renkli ışık etkisinden bağımsız gösterilir.
 3D salonda görünür esere tıklamak/dokunmak büyük görsel, başlık, açıklama,
 sanatçı ve paylaşım bağlantısını açar. Fare kilitliyken ekran merkezindeki
-işaret kullanılır. Eser seç listesinden İncele düğmesiyle de aynı pencere açılır.
+işaret kullanılır. Bu salondaki eser listesinden İncele düğmesiyle de aynı pencere açılır.
 Kart açıkken yürüyüş/bakış durur; ESC kartı kapatıp aynı salon konumuna döner.
 Kamera esere otomatik yaklaşmaz.
 
