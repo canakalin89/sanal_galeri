@@ -158,7 +158,22 @@ birlikte güncelleyin.
 Lacivert/camgöbeği okul tasarımı, orijinal görsel oranlarını koruyan sütunlar,
 klavye/dokunmatik büyük görsel gezinmesi ve WQXR radyo bileşeni bulunur.
 3D mod yalnızca butonla yüklenir; WASD/fare veya mobil joystick ile gezinilir.
+Fare kilidi desteklenmediğinde sürükleyerek bakılabilir. Mobilde yürüyüş ve
+bakış farklı parmaklarla birlikte kullanılabilir; çubuk hareketi yürüyüş hızını ayarlar.
+Salon yüklenirken de kapatılabilir. Kapanışta kontroller ve sahne kaynakları
+temizlenir; geç tamamlanan yüklemeler kapatılan salona uygulanmaz. Model
+çözücü, varsa devam eden işleri tamamlanınca serbest bırakılır.
+Karşılama panosunun başlangıç genişliği ekranın görüş alanına göre sınırlandırılır.
 Esere tıklayıp yaklaşma/bilgi kartı henüz uygulanmış değildir.
+
+Görsel penceresinde yükleme/hata durumu ve Tekrar dene düğmesi bulunur.
+Eser açıklamaları ayrı, kaydırılabilir alandadır; dikey kaydırma eser değiştirmez.
+Tab odağı açık pencere içinde kalır ve kapanınca galeriye döner. ESC ile kapatma
+ve sağ/sol oklarla eser değiştirme desteklenir.
+
+Radyo mobilde ilk ziyarette kapalıdır; açılma tercihi hatırlanır. Oynatıcı yalnızca
+ilk açılışta yüklenir. Daraltma müziği durdurmaz; durdurmak için oynatıcıdaki
+duraklatma düğmesini kullanın. Gömme modunda oynatıcı yüklenmez.
 
 ```html
 <iframe src="https://asalgaleri.vercel.app/?embed=1#hat-sergisi"

@@ -99,7 +99,7 @@
   </div>
 
   <!-- 3D SANAL SERGİ SALONU -->
-  <div class="gal3d-overlay hidden" id="gal3d-overlay">
+  <div class="gal3d-overlay hidden" id="gal3d-overlay" role="dialog" aria-modal="true" aria-label="3D sergi salonu" tabindex="-1">
     <div class="gal3d-canvas-container" id="gal3d-canvas-container"></div>
 
     <div class="gal3d-loading" id="gal3d-loading">
@@ -117,7 +117,7 @@
     </div>
 
     <!-- Sağ üst: çıkış -->
-    <button class="gal3d-close" id="gal3d-close">
+    <button class="gal3d-close" id="gal3d-close" aria-label="2D galeriye dön">
       <span>&#8592;</span> 2D Galeriye Dön
     </button>
 
@@ -143,7 +143,11 @@
     <button class="lb-nav lb-prev" id="lb-prev" aria-label="Önceki">&#8249;</button>
     <button class="lb-nav lb-next" id="lb-next" aria-label="Sonraki">&#8250;</button>
     <img class="lb-img" id="lb-img" src="" alt="" />
-    <div class="lb-info">
+    <div class="lb-load-state">
+      <p id="lb-status" role="status" aria-live="polite"></p>
+      <button id="lb-retry" class="hidden" type="button">Tekrar dene</button>
+    </div>
+    <div class="lb-info" tabindex="0" role="region" aria-label="Eser bilgileri">
       <span class="lb-title" id="lb-title"></span>
       <span class="lb-caption" id="lb-caption"></span>
       <span class="lb-artist" id="lb-artist"></span>
@@ -156,11 +160,11 @@
     <div class="radio-header">
       <span class="radio-icon" aria-hidden="true">&#9834;</span>
       <span class="radio-title">Galeri Müziği</span>
-      <button class="radio-toggle" id="radio-toggle" aria-label="Müziği gizle">&#9660;</button>
+      <button class="radio-toggle" id="radio-toggle" aria-label="Müziği göster" aria-controls="radio-body" aria-expanded="false">&#9650;</button>
     </div>
-    <div class="radio-body" id="radio-body">
+    <div class="radio-body" id="radio-body" hidden>
       <iframe
-        src="https://www.wqxr.org/widgets/embeddable_player/?stream=wqxr#showPlaylist=false"
+        data-src="https://www.wqxr.org/widgets/embeddable_player/?stream=wqxr#showPlaylist=false"
         frameborder="0"
         class="radio-iframe"
         title="WQXR Klasik Müzik Radyosu"
@@ -199,20 +203,22 @@
     (function () {
       var body   = document.getElementById('radio-body');
       var toggle = document.getElementById('radio-toggle');
-      var open   = localStorage.getItem('radio-open') !== 'false';
-      if (!open) { body.style.display = 'none'; toggle.innerHTML = '&#9650;'; }
+      var saved = null;
+      try { saved = localStorage.getItem('radio-open'); } catch (e) { /* Depolama kapalı olsa da radyo çalışır. */ }
+      var open = saved === 'true' || (saved !== 'false' && !window.matchMedia('(max-width: 600px)').matches);
+      function render() {
+        body.hidden = !open;
+        toggle.textContent = open ? '▼' : '▲';
+        toggle.setAttribute('aria-label', open ? 'Müziği gizle' : 'Müziği göster');
+        toggle.setAttribute('aria-expanded', String(open));
+        var frame = body.querySelector('iframe');
+        if (open && !document.body.classList.contains('embed-mode') && !frame.hasAttribute('src')) frame.src = frame.dataset.src;
+      }
+      render();
       toggle.addEventListener('click', function () {
-        if (body.style.display === 'none') {
-          body.style.display = '';
-          toggle.innerHTML = '&#9660;';
-          toggle.setAttribute('aria-label', 'Müziği gizle');
-          localStorage.setItem('radio-open', 'true');
-        } else {
-          body.style.display = 'none';
-          toggle.innerHTML = '&#9650;';
-          toggle.setAttribute('aria-label', 'Müziği göster');
-          localStorage.setItem('radio-open', 'false');
-        }
+        open = !open;
+        render();
+        try { localStorage.setItem('radio-open', String(open)); } catch (e) { /* Tercih bu sayfada korunur. */ }
       });
     })();
   </script>

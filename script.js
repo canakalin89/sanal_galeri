@@ -37,6 +37,7 @@ async function resolveDriveExhibitionImages(ex) {
 
 let ALL_EXHIBITIONS = [];
 let exhibitionsReady = false;
+let galleryViewVersion = 0;
 
 async function loadExhibitionsMeta() {
   try {
@@ -55,6 +56,8 @@ function findExhibitionMeta(id) {
 /* ─── ROUTING (hash tabanlı) ─────────────────────────────── */
 
 async function route() {
+  closeLightbox();
+  window.closeGallery3D?.();
   if (!exhibitionsReady) await loadExhibitionsMeta();
   const id = location.hash.slice(1);
   const exhibition = id ? findExhibitionMeta(id) : null;
@@ -88,6 +91,7 @@ function makeLabel(img, exhibitionName, index) {
 /* ─── ANA SAYFA ──────────────────────────────────────────── */
 
 async function showHome() {
+  galleryViewVersion++;
   document.getElementById('view-home').classList.remove('hidden');
   document.getElementById('view-gallery').classList.add('hidden');
   document.getElementById('site-header').classList.remove('hidden');
@@ -148,6 +152,7 @@ async function showHome() {
 /* ─── GALERİ SAYFASI ─────────────────────────────────────── */
 
 async function showGallery(exhibition) {
+  const version = ++galleryViewVersion;
   document.getElementById('view-home').classList.add('hidden');
   document.getElementById('view-gallery').classList.remove('hidden');
   document.getElementById('site-header').classList.add('hidden');
@@ -176,10 +181,12 @@ async function showGallery(exhibition) {
   try {
     images = await resolveDriveExhibitionImages(exhibition);
   } catch (err) {
+    if (version !== galleryViewVersion) return;
     grid.innerHTML = '<div class="gallery-error"><strong>Sergi yüklenemedi</strong><p>' + escapeHtml(err.message) + '</p></div>';
     return;
   }
 
+  if (version !== galleryViewVersion) return;
   countEl.textContent = images.length + ' eser';
   grid.innerHTML = '';
 
@@ -238,32 +245,85 @@ let currentImages = [];
 let currentIndex  = 0;
 let currentExName = '';
 let lastFocusedItem = null;
+let releaseLightbox = null;
+let lightboxLoad = 0;
+
+// Pencere dışını geçici olarak devre dışı bırakır; kapanınca önceki odağı geri verir.
+window.activateGalleryModal = function (dialog) {
+  const previousFocus = document.activeElement;
+  const previousOverflow = document.body.style.overflow;
+  const siblings = [...document.body.children].filter(node => node !== dialog);
+  const inertStates = siblings.map(node => node.inert);
+  siblings.forEach(node => { node.inert = true; });
+  document.body.style.overflow = 'hidden';
+  const controller = new AbortController();
+  const controls = () => [...dialog.querySelectorAll('button, [href], [tabindex="0"]')]
+    .filter(node => !node.disabled && node.getClientRects().length);
+  dialog.addEventListener('keydown', event => {
+    if (event.key !== 'Tab') return;
+    const items = controls();
+    const index = items.indexOf(document.activeElement);
+    event.preventDefault();
+    const nextIndex = index < 0 ? (event.shiftKey ? items.length - 1 : 0)
+      : (index + (event.shiftKey ? -1 : 1) + items.length) % items.length;
+    (items[nextIndex] || dialog).focus();
+  }, { signal: controller.signal });
+  (controls()[0] || dialog).focus();
+  return () => {
+    controller.abort();
+    siblings.forEach((node, index) => { node.inert = inertStates[index]; });
+    document.body.style.overflow = previousOverflow;
+    if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+  };
+};
 
 function updateLightboxImage() {
   const img = currentImages[currentIndex];
   const lbImg = document.getElementById('lb-img');
-  lbImg.src = img.src;
+  const status = document.getElementById('lb-status');
+  const request = ++lightboxLoad;
+  status.textContent = 'Görsel yükleniyor…';
+  lbImg.classList.add('hidden');
+  document.getElementById('lb-retry').classList.add('hidden');
+  const pending = new Image();
+  pending.onload = () => {
+    if (request !== lightboxLoad) return;
+    lbImg.src = img.src;
+    lbImg.classList.remove('hidden');
+    status.textContent = '';
+  };
+  pending.onerror = () => {
+    if (request !== lightboxLoad) return;
+    status.textContent = 'Görsel yüklenemedi. Bağlantınızı kontrol edip tekrar deneyin.';
+    document.getElementById('lb-retry').classList.remove('hidden');
+  };
+  pending.src = img.src;
   lbImg.alt = makeLabel(img, currentExName, currentIndex);
   document.getElementById('lb-title').textContent = img.title || '';
   document.getElementById('lb-caption').textContent = img.caption || '';
   document.getElementById('lb-artist').textContent = img.artist || '';
   document.getElementById('lb-counter').textContent = (currentIndex + 1) + ' / ' + currentImages.length;
+  document.getElementById('lb-prev').disabled = currentImages.length < 2;
+  document.getElementById('lb-next').disabled = currentImages.length < 2;
 }
 
 function openLightbox(images, index, exhibitionName) {
+  if (!images.length) return;
   currentImages = images;
   currentIndex  = index;
   currentExName = exhibitionName || '';
   updateLightboxImage();
   document.getElementById('lightbox').classList.add('open');
-  document.body.style.overflow = 'hidden';
-  document.getElementById('lb-close').focus();
+  if (!releaseLightbox) releaseLightbox = window.activateGalleryModal(document.getElementById('lightbox'));
 }
 
 function closeLightbox() {
+  if (!releaseLightbox) return;
+  lightboxLoad++;
   document.getElementById('lightbox').classList.remove('open');
-  document.body.style.overflow = '';
-  if (lastFocusedItem) lastFocusedItem.focus();
+  releaseLightbox();
+  releaseLightbox = null;
+  if (lastFocusedItem?.isConnected) lastFocusedItem.focus({ preventScroll: true });
 }
 
 function prev() {
@@ -280,9 +340,11 @@ document.getElementById('lb-close').addEventListener('click', closeLightbox);
 document.getElementById('lb-overlay').addEventListener('click', closeLightbox);
 document.getElementById('lb-prev').addEventListener('click', prev);
 document.getElementById('lb-next').addEventListener('click', next);
+document.getElementById('lb-retry').addEventListener('click', updateLightboxImage);
 
 document.addEventListener('keydown', e => {
   if (!document.getElementById('lightbox').classList.contains('open')) return;
+  if (['Escape', 'ArrowLeft', 'ArrowRight'].includes(e.key)) e.preventDefault();
   if (e.key === 'Escape')     closeLightbox();
   if (e.key === 'ArrowLeft')  prev();
   if (e.key === 'ArrowRight') next();
@@ -290,15 +352,23 @@ document.addEventListener('keydown', e => {
 
 /* ─── SWIPE (dokunmatik) ─────────────────────────────────── */
 
-let touchStartX = 0;
+let swipeStart = null;
 const lb = document.getElementById('lightbox');
 lb.addEventListener('touchstart', e => {
-  touchStartX = e.changedTouches[0].clientX;
+  if (e.touches.length !== 1 || !e.target.closest('.lb-img')) { swipeStart = null; return; }
+  const touch = e.changedTouches[0];
+  swipeStart = { x: touch.clientX, y: touch.clientY, id: touch.identifier };
 }, { passive: true });
 lb.addEventListener('touchend', e => {
-  const dx = e.changedTouches[0].clientX - touchStartX;
-  if (Math.abs(dx) > 50) { dx < 0 ? next() : prev(); }
+  if (!swipeStart) return;
+  const touch = [...e.changedTouches].find(t => t.identifier === swipeStart.id);
+  if (!touch) return;
+  const dx = touch.clientX - swipeStart.x;
+  const dy = touch.clientY - swipeStart.y;
+  swipeStart = null;
+  if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) { dx < 0 ? next() : prev(); }
 }, { passive: true });
+lb.addEventListener('touchcancel', () => { swipeStart = null; }, { passive: true });
 
 /* ─── 3D SANAL SERGİ SALONU (lazy-load) ──────────────────── */
 
@@ -320,13 +390,17 @@ function loadGallery3DScript() {
 async function open3DGallery(images, exhibitionName, exhibitionDescription) {
   const btn = document.getElementById('btn-3d');
   const originalText = btn.textContent;
+  const openingHash = location.hash;
   btn.disabled = true;
   btn.textContent = 'Yükleniyor…';
   try {
     await loadGallery3DScript();
-    window.openGallery3D(images, exhibitionName, exhibitionDescription);
+    if (location.hash !== openingHash) return;
+    // Modal odağı kapanışta dönebilsin; yükleme boyunca düğme zaten arka planda inert olur.
+    btn.disabled = false;
+    await window.openGallery3D(images, exhibitionName, exhibitionDescription);
   } catch (err) {
-    alert('3D salon yüklenemedi. İnternet bağlantınızı kontrol edip tekrar deneyin.');
+    alert('3D salon açılamadı. Bağlantınızı ve tarayıcınızın WebGL desteğini kontrol edin. 2D galeriyi kullanmaya devam edebilirsiniz.');
   } finally {
     btn.disabled = false;
     btn.textContent = originalText;
