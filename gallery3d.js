@@ -6,10 +6,45 @@
   const THREE_URL = '/vendor/three.module.js';
 
   let THREE = null;
-  let gltfLoaderPromise = null;
   let renderer, scene, camera, clock;
-  let animationId = null;
   let raf = null;
+  let session = null;
+
+  function isCurrent(run) { return session === run && !run.controller.signal.aborted; }
+
+  // Aynı geometri/doku klonlarda paylaşılabilir; her kaynağı yalnızca bir kez bırak.
+  function disposeObjects(roots) {
+    const resources = new Set();
+    const bitmaps = new Set();
+    for (const root of roots) root?.traverse(object => {
+      if (object.geometry) resources.add(object.geometry);
+      if (object.shadow) resources.add(object.shadow);
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      for (const material of materials) {
+        if (!material) continue;
+        resources.add(material);
+        for (const value of Object.values(material)) {
+          if (!value?.isTexture) continue;
+          resources.add(value);
+          if (value.image?.close) bitmaps.add(value.image);
+        }
+      }
+    });
+    resources.forEach(resource => resource.dispose());
+    bitmaps.forEach(bitmap => bitmap.close());
+  }
+
+  function listen(target, type, callback, options = {}) {
+    target.addEventListener(type, callback, { ...options, signal: session.controller.signal });
+  }
+
+  function resetControls() {
+    state.keys = {};
+    Object.assign(state.joystick, { active: false, dx: 0, dy: 0, pointerId: null });
+    Object.assign(state.lookTouch, { active: false, pointerId: null });
+    const stick = el('gal3d-joy-stick');
+    if (stick) stick.style.transform = 'translate(0,0)';
+  }
 
   const state = {
     active: false,
@@ -347,26 +382,43 @@
   // Prosedürel mobilyaların yerini alır; yüklenemezse sessizce prosedürel
   // halleri korunur (yedek/fallback).
 
-  async function getGLTFLoader() {
-    if (gltfLoaderPromise) return gltfLoaderPromise;
-    gltfLoaderPromise = (async () => {
+  async function getGLTFLoader(run) {
+    if (run.loaderPromise) return run.loaderPromise;
+    run.loaderPromise = (async () => {
       const [{ GLTFLoader }, { DRACOLoader }] = await Promise.all([
         import('/vendor/loaders/GLTFLoader.js'),
         import('/vendor/loaders/DRACOLoader.js')
       ]);
+      if (!isCurrent(run)) throw new Error('Salon kapatıldı');
       const dracoLoader = new DRACOLoader();
+      run.dracoLoader = dracoLoader;
       dracoLoader.setDecoderPath('/vendor/draco/');
       const loader = new GLTFLoader();
       loader.setDRACOLoader(dracoLoader);
       return loader;
     })();
-    return gltfLoaderPromise;
+    return run.loaderPromise;
   }
 
-  function loadModel(url) {
-    return getGLTFLoader().then(loader => new Promise((resolve, reject) => {
-      loader.load(url, gltf => resolve(gltf.scene), undefined, reject);
-    }));
+  function loadModel(url, run) {
+    run.pendingModels++;
+    return getGLTFLoader(run).then(loader => new Promise((resolve, reject) => {
+      if (!isCurrent(run)) return reject(new Error('Salon kapatıldı'));
+      loader.load(url, gltf => {
+        if (!isCurrent(run)) {
+          disposeObjects([gltf.scene]);
+          reject(new Error('Salon kapatıldı'));
+          return;
+        }
+        // Klonlanmayan model parçaları da kapanışta temizlenir.
+        run.roots.add(gltf.scene);
+        resolve(gltf.scene);
+      }, undefined, reject);
+    })).finally(() => {
+      run.pendingModels--;
+      // Devam eden çözümlemeyi ortasında kesmek bekleyen Promise'leri kilitler.
+      if (!isCurrent(run) && run.pendingModels === 0) run.dracoLoader?.dispose();
+    });
   }
 
   // Modeli verilen hedef boyuta göre ölçekler, tabanını y=0'a, merkezini
@@ -397,7 +449,7 @@
   function removeFallback(roomGroup, kind) {
     roomGroup.children
       .filter(c => c.userData.isProceduralFallback === kind)
-      .forEach(c => roomGroup.remove(c));
+      .forEach(c => { session.roots.add(c); roomGroup.remove(c); });
   }
 
   function applyShadows(model) {
@@ -407,9 +459,10 @@
     return model;
   }
 
-  function enhanceRoomWithRealModels(roomGroup, signInfo) {
+  function enhanceRoomWithRealModels(roomGroup, signInfo, run) {
     // Seyir bankı
-    loadModel('/vendor/models/bench.glb').then(model => {
+    loadModel('/vendor/models/bench.glb', run).then(model => {
+      if (!isCurrent(run)) return;
       normalizeModel(model, 1.7);
       applyShadows(model);
       model.position.z += -1.8;
@@ -418,7 +471,8 @@
     }).catch(() => { /* prosedürel bank kalır */ });
 
     // Saksılı bitki — 4 köşeye aynı modelden klon
-    loadModel('/vendor/models/plant.glb').then(model => {
+    loadModel('/vendor/models/plant.glb', run).then(model => {
+      if (!isCurrent(run)) return;
       normalizeModel(model, 1.3);
       applyShadows(model);
       removeFallback(roomGroup, 'plant');
@@ -438,7 +492,8 @@
 
     // Küçük saksı aksanları — çok-nesneli kümeden (plant_accents.glb) tek tek
     // seçilip odanın çeşitli noktalarına (duvar diplerine, banka yakın) dağıtılır.
-    loadModel('/vendor/models/plant_accents.glb').then(model => {
+    loadModel('/vendor/models/plant_accents.glb', run).then(model => {
+      if (!isCurrent(run)) return;
       const allMeshes = [];
       model.traverse(child => {
         if (child.isMesh) allMeshes.push(child);
@@ -484,7 +539,8 @@
     // önceki boyut (1.2m) devasa bir salonda görünmez kalıyordu; ayrıca hiç
     // ışık kaynağı eklenmemişti — model sadece dekoratifti. Şimdi hem daha
     // büyük hem de gerçek, sıcak bir nokta ışık kaynağı ile aydınlatıyor.
-    loadModel('/vendor/models/chandelier.glb').then(model => {
+    loadModel('/vendor/models/chandelier.glb', run).then(model => {
+      if (!isCurrent(run)) return;
       const size = normalizeModel(model, 1.9);
       model.position.y += state.wallHeight - size.y - 0.05;
       applyShadows(model);
@@ -502,7 +558,8 @@
     // bir küme; tek parça gibi ölçeklenirse her biri cüce kalır. Her kaideyi
     // kendi başına çıkarıp karşılama panosunun bulunduğu orta bölmenin
     // (partition) iki yanına ayrı ayrı yerleştiriyoruz.
-    loadModel('/vendor/models/pedestal.glb').then(model => {
+    loadModel('/vendor/models/pedestal.glb', run).then(model => {
+      if (!isCurrent(run)) return;
       const stands = [];
       model.traverse(child => { if (child.isMesh) stands.push(child); });
       if (stands.length === 0) return;
@@ -545,7 +602,7 @@
     });
   }
 
-  async function placeArtworks(roomGroup, images) {
+  function placeArtworks(roomGroup, images, run) {
     const wallLen = state.roomHalfWidth * 2;
     // Eserler artık 4 duvara ROUND-ROBIN dağıtılır (0,1,2,3,0,1,2,3,…) —
     // hiçbir duvar boş kalmaz ve sayı 4'e bölünmese bile duvarlar arasındaki
@@ -633,6 +690,7 @@
       // Doku asenkron yüklenir, yüklenince gerçek boy oranına göre yeniden boyutlanır
       loadImageTexture(img.thumbSrc ? img.thumbSrc.replace(/=w\d+/, '=w' + texWidth) : img.src).then(tex => {
         if (!tex) return;
+        if (!isCurrent(run)) { tex.dispose(); return; }
         const ratio = tex.image.width / tex.image.height;
         let w = 1.8, h = 1.8 / ratio;
         if (h > 2.2) { h = 2.2; w = h * ratio; }
@@ -650,12 +708,21 @@
 
   /* ─── KARŞILAMA PANOSU (okul logosu + sergi bilgisi) ────── */
 
-  function loadImageElement(src) {
+  function loadImageElement(src, signal) {
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
-      img.onload = () => resolve(img);
-      img.onerror = reject;
+      const finish = (error) => {
+        clearTimeout(timer);
+        signal.removeEventListener('abort', abort);
+        img.onload = img.onerror = null;
+        if (error) { img.src = ''; reject(error); } else resolve(img);
+      };
+      const abort = () => finish(new Error('Görsel yükleme iptal edildi'));
+      const timer = setTimeout(abort, 10000);
+      signal.addEventListener('abort', abort, { once: true });
+      img.onload = () => finish();
+      img.onerror = () => finish(new Error('Görsel yüklenemedi'));
       img.src = src;
     });
   }
@@ -771,17 +838,21 @@
     return { tex, aspect: canvas.width / canvas.height };
   }
 
-  async function addWelcomeSign(roomGroup, schoolName, exhibitionName, description) {
+  async function addWelcomeSign(roomGroup, schoolName, exhibitionName, description, run) {
     let logoImg = null;
-    try { logoImg = await loadImageElement('/assets/logo.png'); } catch (e) { /* logo olmadan devam */ }
+    try { logoImg = await loadImageElement('/assets/logo.png', run.controller.signal); } catch (e) { /* logo olmadan devam */ }
+    if (!isCurrent(run)) return null;
 
     const { tex, aspect } = buildWelcomeSignTexture(schoolName, exhibitionName, description, logoImg);
     const mat = new THREE.MeshBasicMaterial({ map: tex });
 
-    const signWidth = Math.min(state.roomHalfWidth * 1.1, 5.5);
+    const partitionZ = -Math.min(4.3, Math.max(2.6, state.roomHalfDepth - 1.2));
+    // Dar ekranlarda pano, başlangıçtaki yatay görüş alanına sığar.
+    const visibleWidth = 2 * (Math.abs(partitionZ) - 0.2) * Math.tan(camera.fov * Math.PI / 360) * camera.aspect;
+    const signWidth = Math.min(state.roomHalfWidth * 1.1, 5.5, visibleWidth * 0.8);
     const signHeight = signWidth / aspect;
     const partitionThickness = 0.22;
-    const partitionHeight = signHeight + 0.9;
+    const partitionHeight = Math.max(signHeight + 0.9, 2.2);
     const partitionWidth = signWidth + 0.6;
 
     // Serbest duran orta bölme duvarı — girişten hemen sonra, iki yüzünde de
@@ -789,7 +860,6 @@
     // yaklaşılsın pano görülür.
     // Spawn noktasından (0,1.65,0) rahat okunacak bir mesafede — çok yakın
     // olursa pano ekranı kaplar, çok uzak olursa okunmaz.
-    const partitionZ = -Math.min(4.3, Math.max(2.6, state.roomHalfDepth - 1.2));
     const partitionMat = new THREE.MeshStandardMaterial({ color: 0xe4dac8, roughness: 0.85 });
     const partition = new THREE.Mesh(
       new THREE.BoxGeometry(partitionWidth, partitionHeight, partitionThickness),
@@ -800,7 +870,7 @@
     partition.receiveShadow = true;
     roomGroup.add(partition);
 
-    const y = partitionHeight / 2 + 0.1;
+    const y = Math.max(partitionHeight / 2 + 0.1, 1.65);
     const frameMat = new THREE.MeshStandardMaterial({ color: 0xc9a84c, roughness: 0.35, metalness: 0.55 });
 
     // Ön yüz (girişe/spawn noktasına bakar, normal +Z)
@@ -878,19 +948,31 @@
   /* ─── KONTROLLER ─────────────────────────────────────────── */
 
   function setupDesktopControls(container) {
-    container.addEventListener('click', () => {
-      container.requestPointerLock?.();
+    const run = session;
+    listen(container, 'click', () => {
+      try {
+        container.requestPointerLock?.()?.catch(() => {
+          if (isCurrent(run)) el('gal3d-hint').textContent = 'Fare kilidi kullanılamıyor. Bakmak için sürükleyin; yürümek için WASD / ok tuşlarını kullanın.';
+        });
+      } catch { /* Gömülü tarayıcılarda sürükleyerek bakış kullanılabilir. */ }
     });
 
-    document.addEventListener('mousemove', e => {
+    listen(document, 'mousemove', e => {
       if (document.pointerLockElement !== container) return;
       state.yaw -= e.movementX * 0.0022;
       state.pitch -= e.movementY * 0.0022;
       state.pitch = Math.max(-1.2, Math.min(1.2, state.pitch));
     });
 
-    window.addEventListener('keydown', e => { state.keys[e.code] = true; });
-    window.addEventListener('keyup', e => { state.keys[e.code] = false; });
+    const movementKeys = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+    listen(window, 'keydown', e => {
+      if (movementKeys.has(e.code)) { e.preventDefault(); state.keys[e.code] = true; }
+    });
+    listen(window, 'keyup', e => { state.keys[e.code] = false; });
+    listen(document, 'pointerlockchange', () => {
+      if (document.pointerLockElement !== container) resetControls();
+    });
+    setupLookControls(container);
   }
 
   function setupMobileControls(container) {
@@ -898,58 +980,66 @@
     const joyStick = el('gal3d-joy-stick');
     if (!joyBase) return;
 
-    joyBase.addEventListener('touchstart', e => {
-      const t = e.touches[0];
+    listen(joyBase, 'pointerdown', e => {
+      if (state.joystick.active) return;
+      joyBase.setPointerCapture(e.pointerId);
       state.joystick.active = true;
-      state.joystick.startX = t.clientX;
-      state.joystick.startY = t.clientY;
-    }, { passive: true });
+      state.joystick.pointerId = e.pointerId;
+      state.joystick.startX = e.clientX;
+      state.joystick.startY = e.clientY;
+    });
 
-    joyBase.addEventListener('touchmove', e => {
-      if (!state.joystick.active) return;
-      const t = e.touches[0];
-      let dx = t.clientX - state.joystick.startX;
-      let dy = t.clientY - state.joystick.startY;
+    listen(joyBase, 'pointermove', e => {
+      if (!state.joystick.active || e.pointerId !== state.joystick.pointerId) return;
+      let dx = e.clientX - state.joystick.startX;
+      let dy = e.clientY - state.joystick.startY;
       const max = 40;
       const len = Math.hypot(dx, dy);
       if (len > max) { dx = dx / len * max; dy = dy / len * max; }
       state.joystick.dx = dx / max;
       state.joystick.dy = dy / max;
       joyStick.style.transform = `translate(${dx}px, ${dy}px)`;
-    }, { passive: true });
+    });
 
-    function resetJoystick() {
+    function resetJoystick(e) {
+      if (e.pointerId !== state.joystick.pointerId) return;
       state.joystick.active = false;
+      state.joystick.pointerId = null;
       state.joystick.dx = 0;
       state.joystick.dy = 0;
       joyStick.style.transform = 'translate(0,0)';
     }
-    joyBase.addEventListener('touchend', resetJoystick);
-    joyBase.addEventListener('touchcancel', resetJoystick);
+    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) listen(joyBase, type, resetJoystick);
+    setupLookControls(container);
+  }
 
-    // Bakınma: ekranın geri kalanında sürükleme
-    container.addEventListener('touchstart', e => {
-      if (joyBase.contains(e.target)) return;
-      const t = e.touches[0];
+  function setupLookControls(container) {
+    // Her parmak kendi pointerId değeriyle takip edilir; joystick ile karışmaz.
+    listen(container, 'pointerdown', e => {
+      if (state.lookTouch.active || document.pointerLockElement === container) return;
+      container.setPointerCapture(e.pointerId);
       state.lookTouch.active = true;
-      state.lookTouch.lastX = t.clientX;
-      state.lookTouch.lastY = t.clientY;
-    }, { passive: true });
+      state.lookTouch.pointerId = e.pointerId;
+      state.lookTouch.lastX = e.clientX;
+      state.lookTouch.lastY = e.clientY;
+    });
 
-    container.addEventListener('touchmove', e => {
-      if (!state.lookTouch.active || joyBase.contains(e.target)) return;
-      const t = e.touches[0];
-      const dx = t.clientX - state.lookTouch.lastX;
-      const dy = t.clientY - state.lookTouch.lastY;
+    listen(container, 'pointermove', e => {
+      if (!state.lookTouch.active || e.pointerId !== state.lookTouch.pointerId || document.pointerLockElement === container) return;
+      const dx = e.clientX - state.lookTouch.lastX;
+      const dy = e.clientY - state.lookTouch.lastY;
       state.yaw -= dx * 0.0035;
       state.pitch -= dy * 0.0035;
       state.pitch = Math.max(-1.2, Math.min(1.2, state.pitch));
-      state.lookTouch.lastX = t.clientX;
-      state.lookTouch.lastY = t.clientY;
-    }, { passive: true });
+      state.lookTouch.lastX = e.clientX;
+      state.lookTouch.lastY = e.clientY;
+    });
 
-    container.addEventListener('touchend', e => {
-      if (e.touches.length === 0) state.lookTouch.active = false;
+    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) listen(container, type, e => {
+      if (e.pointerId === state.lookTouch.pointerId) {
+        state.lookTouch.active = false;
+        state.lookTouch.pointerId = null;
+      }
     });
   }
 
@@ -977,7 +1067,7 @@
       const delta = new THREE.Vector3();
       delta.addScaledVector(forward, -moveZ);
       delta.addScaledVector(right, moveX);
-      if (delta.lengthSq() > 0) delta.normalize();
+      if (delta.lengthSq() > 1) delta.normalize();
       camera.position.addScaledVector(delta, speed * dt);
 
       const margin = 0.6;
@@ -1044,6 +1134,7 @@
   let minimapFrameCount = 0;
 
   function animate() {
+    if (!state.active || !renderer) return;
     raf = requestAnimationFrame(animate);
     const dt = Math.min(0.05, clock.getDelta());
     updateMovement(dt);
@@ -1064,58 +1155,63 @@
     const loading = el('gal3d-loading');
     if (!overlay || !container) return;
 
+    const run = { controller: new AbortController(), roots: new Set(), pendingModels: 0 };
+    session = run;
+    state.active = true;
+    resetControls();
     overlay.classList.remove('hidden');
     loading.classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
+    run.releaseModal = window.activateGalleryModal(overlay);
+    listen(window, 'keydown', escListener);
+    listen(window, 'blur', resetControls);
+    listen(document, 'visibilitychange', () => { if (document.hidden) resetControls(); });
 
     try {
       await loadThree();
-    } catch (err) {
+      if (!isCurrent(run)) return;
+
+      state.images = images;
+      state.frames = [];
+      state.yaw = 0;
+      state.pitch = 0;
+      state.keys = {};
+      state.isMobile = isMobileDevice();
+
+      el('gal3d-joystick').classList.toggle('hidden', !state.isMobile);
+      // Kontrol ipucu artık kalıcı bir HUD — otomatik kaybolmuyor
+      el('gal3d-hint').innerHTML = state.isMobile
+        ? '<strong>Yürü:</strong> Sol çubuk &nbsp; <strong>Bak:</strong> Ekranı sürükle'
+        : '<strong>Yürü:</strong> WASD / Ok tuşları &nbsp; <strong>Bak:</strong> Fare / Sürükle &nbsp; <strong>Çık:</strong> ESC';
+      el('gal3d-hint').classList.remove('hidden');
+      el('gal3d-minimap-wrap').classList.remove('hidden');
+      const schoolName = typeof SCHOOL_NAME !== 'undefined' ? SCHOOL_NAME : 'Sanal Sergi';
+      const badgeSchool = el('gal3d-badge-school');
+      if (badgeSchool) badgeSchool.textContent = schoolName;
+
+      setupScene(container);
+      const room = buildRoom(images.length);
+      scene.add(room);
+      placeArtworks(room, images, run);
+      const signInfo = await addWelcomeSign(room, schoolName, exhibitionName, exhibitionDescription, run);
+      if (!isCurrent(run)) return;
+      enhanceRoomWithRealModels(room, signInfo, run);
+
+      if (state.isMobile) {
+        setupMobileControls(container);
+      } else {
+        setupDesktopControls(container);
+      }
+
+      listen(window, 'resize', () => onResize(container));
+
+      clock = new THREE.Clock();
       loading.classList.add('hidden');
-      overlay.classList.add('hidden');
-      document.body.style.overflow = '';
-      alert('3D salon yüklenemedi. İnternet bağlantınızı kontrol edip tekrar deneyin.');
-      return;
+      animate();
+    } catch (error) {
+      if (!isCurrent(run)) return;
+      closeGallery3D();
+      throw error;
     }
-
-    state.active = true;
-    state.images = images;
-    state.frames = [];
-    state.yaw = 0;
-    state.pitch = 0;
-    state.keys = {};
-    state.isMobile = isMobileDevice();
-
-    el('gal3d-joystick').classList.toggle('hidden', !state.isMobile);
-    // Kontrol ipucu artık kalıcı bir HUD — otomatik kaybolmuyor
-    el('gal3d-hint').innerHTML = state.isMobile
-      ? '<strong>Yürü:</strong> Sol çubuk &nbsp; <strong>Bak:</strong> Ekranı sürükle'
-      : '<strong>Yürü:</strong> WASD / Ok tuşları &nbsp; <strong>Bak:</strong> Tıkla + Fare &nbsp; <strong>Çık:</strong> ESC';
-    el('gal3d-hint').classList.remove('hidden');
-    el('gal3d-minimap-wrap').classList.remove('hidden');
-    const schoolName = typeof SCHOOL_NAME !== 'undefined' ? SCHOOL_NAME : 'Sanal Sergi';
-    const badgeSchool = el('gal3d-badge-school');
-    if (badgeSchool) badgeSchool.textContent = schoolName;
-
-    setupScene(container);
-    const room = buildRoom(images.length);
-    scene.add(room);
-    await placeArtworks(room, images);
-    const signInfo = await addWelcomeSign(room, schoolName, exhibitionName, exhibitionDescription);
-    enhanceRoomWithRealModels(room, signInfo); // arka planda yüklenir, hazır olunca sahneye eklenir
-
-    if (state.isMobile) {
-      setupMobileControls(container);
-    } else {
-      setupDesktopControls(container);
-    }
-
-    window.addEventListener('resize', () => onResize(container));
-    window.addEventListener('keydown', escListener);
-
-    clock = new THREE.Clock();
-    loading.classList.add('hidden');
-    animate();
   }
 
   function escListener(e) {
@@ -1124,21 +1220,30 @@
 
   function closeGallery3D() {
     if (!state.active) return;
+    const run = session;
+    session = null;
     state.active = false;
+    run.controller.abort();
+    resetControls();
     cancelAnimationFrame(raf);
-    if (document.pointerLockElement) document.exitPointerLock();
-    window.removeEventListener('keydown', escListener);
+    raf = null;
 
     const container = el('gal3d-canvas-container');
+    if (document.pointerLockElement === container) document.exitPointerLock();
+    disposeObjects([scene, ...run.roots]);
+    run.roots.clear();
+    if (run.pendingModels === 0) run.dracoLoader?.dispose();
     if (renderer) {
       renderer.dispose();
       if (renderer.domElement.parentNode === container) container.removeChild(renderer.domElement);
     }
-    scene = null; camera = null; renderer = null;
+    scene = null; camera = null; renderer = null; clock = null;
     state.frames = [];
+    state.images = [];
+    state.velocity = null;
 
     el('gal3d-overlay').classList.add('hidden');
-    document.body.style.overflow = '';
+    run.releaseModal();
   }
 
   window.openGallery3D = openGallery3D;
