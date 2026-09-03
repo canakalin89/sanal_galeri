@@ -11,7 +11,7 @@ validateDocument('config.json', config);
 validateDocument('exhibitions.json', exhibitions);
 fs.rmSync(output, { recursive: true, force: true });
 fs.mkdirSync(output);
-const files = ['index.html', 'style.css', 'script.js', 'gallery-data.js', 'artwork-tools.js', 'gallery-layout.js', 'gallery-lighting.js', 'gallery-neighborhood.js', 'gallery-weather.js', 'gallery-roof.js', 'gallery-atmosphere.js', 'gallery-game.js', 'gallery-room.js', 'gallery3d.js', 'admin.html', 'admin.css', 'admin-app.js', 'admin-state.js', 'exhibitions.json', 'THIRD_PARTY_ASSETS.md'];
+const files = ['index.html', 'style.css', 'script.js', 'gallery-data.js', 'artwork-tools.js', 'gallery-layout.js', 'gallery-lighting.js', 'gallery-neighborhood.js', 'gallery-weather.js', 'gallery-roof.js', 'gallery-atmosphere.js', 'gallery-figure.js', 'gallery-game.js', 'gallery-room.js', 'gallery3d.js', 'admin.html', 'admin.css', 'admin-app.js', 'admin-state.js', 'exhibitions.json', 'THIRD_PARTY_ASSETS.md'];
 for (const file of files) fs.copyFileSync(path.join(root, file), path.join(output, file));
 fs.cpSync(path.join(root, 'assets'), path.join(output, 'assets'), { recursive: true });
 fs.mkdirSync(path.join(output, 'vendor'));

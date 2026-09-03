@@ -4,8 +4,9 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.GalleryGame = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
-  const LOGO_TAPS = 17;
-  function createRound(total) { return { total, taps: 0, phase: 'idle', countdown: 3, health: 100, wave: 0, kills: 0 }; }
+  const LOGO_TAPS = 17, MAX_LIVES = 3, HIT_GRACE_SECONDS = 1.25;
+  function createRound(total) { return { total, taps: 0, phase: 'idle', countdown: 3, lives: MAX_LIVES, wave: 0, kills: 0 }; }
+  function loseLife(round) { if (round.phase === 'playing') round.lives = Math.max(0, round.lives - 1); return round.lives; }
   function logoTap(round) {
     if (round.phase !== 'idle') return false;
     if (++round.taps !== LOGO_TAPS) return false;
@@ -46,22 +47,24 @@
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     let round = createRound(frames.length), saved = [], queue = [], enemies = [], shots = [], bursts = [];
     let elapsed = 0, waveDelay = 0, shotDelay = 0, immune = 0, firing = false, paused = false, disposed = false;
-    let effects = null, sphere, coreBlue, coreRed, haloBlue, haloRed, hitTime = 0;
+    let effects = null, figureFactory = null, sphere, coreBlue, coreRed, haloBlue, haloRed, hitTime = 0;
     const owned = [], hud = el('gal3d-game-hud'), screen = el('gal3d-game-screen'), overlay = el('gal3d-overlay');
     const blocks = plan.partitions.map(p => ({ min: { x:p.x-0.16,y:0,z:-p.length/2 }, max:{ x:p.x+0.16,y:plan.height-0.3,z:p.length/2 } }));
     const blocked = (a,b) => blocks.some(box => segmentHitsBox(a,b,box));
     const temp = new THREE.Vector3(), aim = new THREE.Vector3(), direction = new THREE.Vector3();
     function announce(text) { if (el('gal3d-game-message').textContent !== text) el('gal3d-game-message').textContent = text; }
     function updateHud() {
-      el('gal3d-game-health').value = round.health;
-      el('gal3d-game-health-number').textContent = round.health + '%';
+      el('gal3d-game-lives').textContent = '♥'.repeat(round.lives) + '♡'.repeat(MAX_LIVES - round.lives);
+      el('gal3d-game-lives').setAttribute('aria-label', `${round.lives} can kaldı`);
+      el('gal3d-game-lives-count').textContent = `${round.lives}/${MAX_LIVES}`;
       el('gal3d-game-wave').textContent = String(round.wave);
       el('gal3d-game-score').textContent = `${round.kills}/${round.total}`;
-      hud.classList.toggle('critical', round.health <= 25);
+      hud.classList.toggle('critical', round.lives === 1);
     }
     function ensureEffects() {
       if (effects) return;
       effects = new THREE.Group(); effects.name = 'Gizli oyun efektleri'; scene.add(effects);
+      figureFactory = GalleryFigure.createFactory(THREE);
       sphere = new THREE.SphereGeometry(0.1, 8, 6);
       coreBlue = new THREE.MeshBasicMaterial({ color:0xc9f4ff, toneMapped:false });
       coreRed = new THREE.MeshBasicMaterial({ color:0xffad60, toneMapped:false });
@@ -95,6 +98,7 @@
       shots=[];bursts=[];
     }
     function restore() {
+      for (const enemy of enemies) enemy.figure.dispose();
       for (const item of saved) {
         item.frame.position.copy(item.position);item.frame.quaternion.copy(item.rotation);item.frame.scale.copy(item.scale);item.frame.visible=item.visible;
         item.shadows.forEach(([mesh,value])=>{mesh.castShadow=value;});
@@ -108,10 +112,10 @@
       announce(won?'Bütün tablolar yerine döndü. Sergin güvende.':'Tablolar yerine döndü. Bir dahaki sefere!');
       onModeChange('ended');
     }
-    function damage(amount) {
+    function damage() {
       if (immune>0 || round.phase!=='playing') return;
-      round.health=Math.max(0,round.health-amount);immune=0.6;hitTime=reducedMotion?0:0.22;
-      updateHud();if(round.health===0)end(false);
+      loseLife(round);immune=HIT_GRACE_SECONDS;hitTime=reducedMotion?0:0.22;
+      updateHud();if(round.lives===0)end(false);
     }
     function tapLogo() {
       if(disposed || !logoTap(round)) return false;
@@ -135,8 +139,11 @@
       for(let i=0;i<size;i++){
         const item=queue.shift();if(!item)break;
         const normal=new THREE.Vector3(0,0,1).applyQuaternion(item.rotation);
-        item.frame.position.copy(item.position).addScaledVector(normal,0.65);
-        enemies.push({frame:item.frame,fireIn:2+i*0.65,hp:round.wave>=5?2:1,seed:i*1.7});
+        const figure=figureFactory.create(item.frame,i*1.7);
+        figure.group.position.copy(item.position).addScaledVector(normal,0.65);figure.group.position.y=0;
+        figure.group.rotation.y=Math.atan2(camera.position.x-figure.group.position.x,camera.position.z-figure.group.position.z);
+        effects.add(figure.group);item.frame.visible=false;
+        enemies.push({figure,fireIn:2+i*0.65,hp:round.wave>=5?2:1});
       }
       updateHud();announce(`Dalga ${round.wave} · ${enemies.length} tablo`);
     }
@@ -150,14 +157,15 @@
           const line=new THREE.Line3(from,to);
           if(shot.blue){
             for(let j=enemies.length-1;j>=0;j--){
-              const enemy=enemies[j];line.closestPointToPoint(enemy.frame.position,true,temp);
-              if(temp.distanceTo(enemy.frame.position)<0.85){
+              const enemy=enemies[j],p=enemy.figure.group.position;
+              const hitBox={min:{x:p.x-0.33,y:0.12,z:p.z-0.3},max:{x:p.x+0.33,y:1.93,z:p.z+0.3}};
+              if(segmentHitsBox(from,to,hitBox)){
                 remove=true;
-                if(--enemy.hp<=0){burst(enemy.frame.position);enemy.frame.visible=false;enemies.splice(j,1);round.kills++;updateHud();}
+                if(--enemy.hp<=0){temp.copy(p);temp.y=1.1;burst(temp);enemy.figure.dispose();enemies.splice(j,1);round.kills++;updateHud();}
                 break;
               }
             }
-          } else {line.closestPointToPoint(camera.position,true,temp);if(temp.distanceTo(camera.position)<0.34){remove=true;damage(9);if(round.phase!=='playing')return;}}
+          } else {line.closestPointToPoint(camera.position,true,temp);if(temp.distanceTo(camera.position)<0.34){remove=true;damage();if(round.phase!=='playing')return;}}
         }
         if(remove){effects.remove(shot.mesh);shots.splice(i,1);}
         else if(!reducedMotion)shot.mesh.children[1].scale.setScalar(0.65+Math.sin(elapsed*20+i)*0.08);
@@ -174,18 +182,27 @@
       el('gal3d-game-hit').style.opacity=String(hitTime/0.22*0.35);
       if(firing)fire();
       for(const enemy of enemies){
-        const p=enemy.frame.position,target=waypoint(plan,p,camera.position);
+        const p=enemy.figure.group.position,target=waypoint(plan,p,camera.position);
         const dx=target.x-p.x,dz=target.z-p.z,distance=Math.hypot(dx,dz);
-        if(p.distanceTo(camera.position)>2.7 || target!==camera.position){
-          const step=Math.min(distance,dt*(0.55+Math.min(round.wave,10)*0.08));
+        const playerDistance=Math.hypot(p.x-camera.position.x,p.z-camera.position.z);
+        let step=0;
+        if(playerDistance>2.7 || target!==camera.position){
+          step=Math.min(distance,dt*(0.55+Math.min(round.wave,10)*0.08));
           if(distance>0.01){p.x+=dx/distance*step;p.z+=dz/distance*step;}
         }
-        p.y=1.8+(reducedMotion?0:Math.sin(elapsed*1.8+enemy.seed)*0.11);
-        enemy.frame.lookAt(camera.position);enemy.fireIn-=dt;
-        if(enemy.fireIn<=0&&!blocked(p,camera.position)){
-          aim.copy(camera.position).sub(p);projectile(p,aim,false);enemy.fireIn=Math.max(1.8,3.3-round.wave*0.12)+Math.random()*0.7;
+        enemy.fireIn-=dt;
+        const charging=Math.max(0,Math.min(1,1-enemy.fireIn/0.65));
+        const facing=step>0.001&&charging===0?Math.atan2(dx,dz):Math.atan2(camera.position.x-p.x,camera.position.z-p.z);
+        const turn=Math.atan2(Math.sin(facing-enemy.figure.group.rotation.y),Math.cos(facing-enemy.figure.group.rotation.y));
+        enemy.figure.group.rotation.y+=turn*Math.min(1,dt*8);
+        enemy.figure.animate(dt,step,charging,reducedMotion);
+        if(enemy.fireIn<=0){
+          const muzzle=enemy.figure.fireOrigin();
+          if(!blocked(muzzle,camera.position)){
+            aim.copy(camera.position).sub(muzzle);projectile(muzzle,aim,false);enemy.figure.onFire();enemy.fireIn=Math.max(1.8,3.3-round.wave*0.12)+Math.random()*0.7;
+          }
         }
-        if(p.distanceTo(camera.position)<1.15){damage(8);if(round.phase!=='playing')return;}
+        if(playerDistance<0.7){damage();if(round.phase!=='playing')return;}
       }
       advanceShots(dt);if(round.phase!=='playing')return;
       for(let i=bursts.length-1;i>=0;i--){const b=bursts[i];b.life-=dt;b.mesh.scale.setScalar(reducedMotion?1:1+(0.42-b.life)*5);if(b.life<=0){effects.remove(b.mesh);bursts.splice(i,1);}}
@@ -207,8 +224,8 @@
         if(value)announce('Devam etmek için salona dön.');
       }
     }
-    function dispose(){exit();disposed=true;scene.remove(effects);owned.forEach(resource=>resource.dispose());}
+    function dispose(){exit();disposed=true;scene.remove(effects);figureFactory?.dispose();owned.forEach(resource=>resource.dispose());}
     return { tapLogo,fire,tick,exit,dispose,setPaused,setFiring:value=>{firing=value;}, mode:()=>round.phase };
   }
-  return { LOGO_TAPS,createRound,logoTap,advanceCountdown,waveSize,segmentHitsBox,waypoint,create };
+  return { LOGO_TAPS,MAX_LIVES,HIT_GRACE_SECONDS,createRound,loseLife,logoTap,advanceCountdown,waveSize,segmentHitsBox,waypoint,create };
 });
