@@ -55,13 +55,14 @@
     keys: {},
     yaw: 0,
     pitch: 0,
-    roomIndex: 0,
     isMobile: false,
     joystick: { active: false, startX: 0, startY: 0, dx: 0, dy: 0 },
     lookTouch: { active: false, lastX: 0, lastY: 0 },
     roomHalfWidth: 6,
     roomHalfDepth: 6,
-    wallHeight: 5.2
+    wallHeight: 5.2,
+    partitions: [],
+    obstacles: []
   };
 
   function isMobileDevice() {
@@ -72,6 +73,81 @@
     if (THREE) return THREE;
     THREE = await import(THREE_URL);
     return THREE;
+  }
+
+  async function getDecorLoader(run) {
+    if (run.loaderPromise) return run.loaderPromise;
+    run.loaderPromise = (async () => {
+      const [{ GLTFLoader }, { DRACOLoader }] = await Promise.all([
+        import('/vendor/loaders/GLTFLoader.js'),
+        import('/vendor/loaders/DRACOLoader.js')
+      ]);
+      if (!isCurrent(run)) throw new Error('Salon kapatıldı.');
+      const dracoLoader = new DRACOLoader();
+      dracoLoader.setDecoderPath('/vendor/draco/');
+      dracoLoader.setWorkerLimit(state.isMobile ? 1 : 2);
+      run.dracoLoader = dracoLoader;
+      return new GLTFLoader().setDRACOLoader(dracoLoader);
+    })();
+    return run.loaderPromise;
+  }
+
+  function loadModel(url, run) {
+    run.pendingModels = (run.pendingModels || 0) + 1;
+    return getDecorLoader(run).then(loader => new Promise((resolve, reject) => {
+      loader.load(url, gltf => {
+        if (!isCurrent(run)) { disposeObjects([gltf.scene]); reject(new Error('Salon kapatıldı.')); return; }
+        resolve(gltf.scene);
+      }, undefined, reject);
+    })).finally(() => {
+      run.pendingModels--;
+      if (!isCurrent(run) && run.pendingModels === 0) run.dracoLoader?.dispose();
+    });
+  }
+
+  function normalizeModel(model, targetSize, axis = 'max') {
+    const bounds = new THREE.Box3().setFromObject(model);
+    const size = new THREE.Vector3(); bounds.getSize(size);
+    const reference = axis === 'x' ? size.x : axis === 'y' ? size.y : axis === 'z' ? size.z : Math.max(size.x, size.y, size.z);
+    model.scale.setScalar(targetSize / (reference || 1));
+    const normalized = new THREE.Box3().setFromObject(model);
+    const center = new THREE.Vector3(); normalized.getCenter(center);
+    model.position.x -= center.x; model.position.z -= center.z; model.position.y -= normalized.min.y;
+    const finalSize = new THREE.Vector3(); normalized.getSize(finalSize);
+    return finalSize;
+  }
+
+  function replaceFallback(room, kind) {
+    const matches = [];
+    room.traverse(node => { if (node.userData.decorFallback === kind) matches.push(node); });
+    for (const node of matches) { node.parent.remove(node); disposeObjects([node]); }
+  }
+
+  function addModelInstances(room, model, placements, kind, targetSize, axis, yForSize) {
+    const size = normalizeModel(model, targetSize, axis);
+    const holder = new THREE.Group();
+    for (const placement of placements) {
+      const instance = model.clone(true);
+      instance.position.x += placement.x;
+      instance.position.z += placement.z;
+      instance.position.y += yForSize ? yForSize(size) : 0;
+      instance.rotation.y += placement.rotation || 0;
+      holder.add(instance);
+    }
+    replaceFallback(room, kind);
+    room.add(holder);
+  }
+
+  function enhanceRoomWithModels(room, plan, run) {
+    const current = () => isCurrent(run) && run.room === room;
+    loadModel('/vendor/models/plant.glb', run).then(model => {
+      if (!current()) { disposeObjects([model]); return; }
+      addModelInstances(room, model, plan.decor.plants, 'plant', 1.35, 'y');
+    }).catch(() => {});
+    loadModel('/vendor/models/chandelier.glb', run).then(model => {
+      if (!current()) { disposeObjects([model]); return; }
+      addModelInstances(room, model, plan.decor.chandeliers, 'chandelier', 0.95, 'y', size => plan.height - size.y - 0.08);
+    }).catch(() => {});
   }
 
   function el(id) { return document.getElementById(id); }
@@ -177,6 +253,24 @@
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1;
     container.appendChild(renderer.domElement);
+    // Mobil tarayıcı GPU belleğini geçici olarak bırakırsa sahneyi sessizce durdurup geri getir.
+    listen(renderer.domElement, 'webglcontextlost', event => {
+      event.preventDefault();
+      cancelAnimationFrame(raf);
+      raf = null;
+      resetControls();
+      const loading = el('gal3d-loading');
+      loading.querySelector('p').textContent = '3D görünüm yeniden hazırlanıyor…';
+      loading.classList.remove('hidden');
+    });
+    listen(renderer.domElement, 'webglcontextrestored', () => {
+      if (!state.active || raf) return;
+      const loading = el('gal3d-loading');
+      loading.querySelector('p').textContent = 'Salon hazırlanıyor…';
+      loading.classList.add('hidden');
+      clock.start();
+      animate();
+    });
     // Sabit üç ışık; eser renkleri ışık/tone mapping etkisinden bağımsızdır.
     scene.add(new THREE.HemisphereLight(0xffffff, 0xaaa79c, 2.2));
     const key = new THREE.DirectionalLight(0xfffaf0, 1.5);
@@ -185,17 +279,18 @@
     fill.position.set(-4, 5, -3); scene.add(fill);
   }
 
-  function showRoom(roomIndex) {
+  function showRoom() {
     const run = session;
     if (!run || state.inspecting) return;
-    const plan = GalleryLayout.plan(state.images.length, roomIndex);
+    const plan = GalleryLayout.plan(state.images.length);
     run.roomController?.abort();
     if (run.room) { scene.remove(run.room); disposeObjects([run.room]); }
     run.roomController = new AbortController();
-    state.roomIndex = roomIndex;
     state.roomHalfWidth = plan.width / 2;
     state.roomHalfDepth = plan.depth / 2;
     state.wallHeight = plan.height;
+    state.partitions = plan.partitions;
+    state.obstacles = plan.obstacles;
     state.frames = [];
     state.yaw = 0; state.pitch = 0;
     resetControls();
@@ -205,20 +300,19 @@
     const room = GalleryRoom.create(THREE, plan, run.exhibitionName, run.schoolName);
     run.room = room;
     scene.add(room);
+    enhanceRoomWithModels(room, plan, run);
     placeArtworks(room, plan, run);
     setupArtworkPicker(plan);
-    el('gal3d-room-select').value = String(roomIndex);
-    el('gal3d-room-prev').disabled = roomIndex === 0;
-    el('gal3d-room-next').disabled = roomIndex === plan.roomCount - 1;
-    el('gal3d-room-status').textContent = (plan.start + 1) + '–' + plan.end + ' / ' + state.images.length + ' eser';
-    el('gal3d-room-nav').classList.remove('hidden');
   }
 
   function onResize(container) {
     if (!renderer || !camera) return;
-    camera.aspect = container.clientWidth / container.clientHeight;
+    const width = Math.max(1, container.clientWidth);
+    const height = Math.max(1, container.clientHeight);
+    camera.aspect = width / height;
     camera.updateProjectionMatrix();
-    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, state.isMobile ? 1.5 : 2));
+    renderer.setSize(width, height);
   }
 
   /* ─── KONTROLLER ─────────────────────────────────────────── */
@@ -297,6 +391,8 @@
     if (!joyBase) return;
 
     listen(joyBase, 'pointerdown', e => {
+      e.preventDefault();
+      e.stopPropagation();
       if (state.inspecting || state.joystick.active) return;
       joyBase.setPointerCapture(e.pointerId);
       state.joystick.active = true;
@@ -306,6 +402,8 @@
     });
 
     listen(joyBase, 'pointermove', e => {
+      e.preventDefault();
+      e.stopPropagation();
       if (!state.joystick.active || e.pointerId !== state.joystick.pointerId) return;
       let dx = e.clientX - state.joystick.startX;
       let dy = e.clientY - state.joystick.startY;
@@ -318,6 +416,8 @@
     });
 
     function resetJoystick(e) {
+      e.preventDefault();
+      e.stopPropagation();
       if (e.pointerId !== state.joystick.pointerId) return;
       state.joystick.active = false;
       state.joystick.pointerId = null;
@@ -390,11 +490,18 @@
       delta.addScaledVector(forward, -moveZ);
       delta.addScaledVector(right, moveX);
       if (delta.lengthSq() > 1) delta.normalize();
-      camera.position.addScaledVector(delta, speed * dt);
-
       const margin = 0.6;
-      camera.position.x = Math.max(-state.roomHalfWidth + margin, Math.min(state.roomHalfWidth - margin, camera.position.x));
-      camera.position.z = Math.max(-state.roomHalfDepth + margin, Math.min(state.roomHalfDepth - margin, camera.position.z));
+      const dx = delta.x * speed * dt, dz = delta.z * speed * dt;
+      const collides = (x, z) => state.partitions.some(partition =>
+        Math.abs(x - partition.x) < 0.58 && Math.abs(z - partition.z) < partition.length / 2 + 0.48
+      ) || state.obstacles.some(obstacle => obstacle.type === 'box'
+        ? Math.abs(x - obstacle.x) < obstacle.halfX + 0.38 && Math.abs(z - obstacle.z) < obstacle.halfZ + 0.38
+        : Math.hypot(x - obstacle.x, z - obstacle.z) < obstacle.radius + 0.38
+      );
+      const nextX = Math.max(-state.roomHalfWidth + margin, Math.min(state.roomHalfWidth - margin, camera.position.x + dx));
+      if (!collides(nextX, camera.position.z)) camera.position.x = nextX;
+      const nextZ = Math.max(-state.roomHalfDepth + margin, Math.min(state.roomHalfDepth - margin, camera.position.z + dz));
+      if (!collides(camera.position.x, nextZ)) camera.position.z = nextZ;
     }
 
     camera.rotation.order = 'YXZ';
@@ -477,7 +584,7 @@
     const loading = el('gal3d-loading');
     if (!overlay || !container) return;
 
-    const run = { controller: new AbortController(), exhibitionName };
+    const run = { controller: new AbortController(), exhibitionName, pendingModels: 0 };
     session = run;
     state.active = true;
     state.inspecting = false;
@@ -487,7 +594,6 @@
     loading.classList.remove('hidden');
     el('gal3d-artwork-picker').classList.add('hidden');
     el('gal3d-aim').classList.add('hidden');
-    el('gal3d-room-nav').classList.add('hidden');
     run.releaseModal = window.activateGalleryModal(overlay);
     listen(window, 'keydown', escListener);
     listen(window, 'blur', resetControls);
@@ -510,7 +616,7 @@
         ? '<strong>Yürü:</strong> Sol çubuk &nbsp; <strong>Bak:</strong> Sürükle &nbsp; <strong>Eser:</strong> Dokun'
         : '<strong>Yürü:</strong> WASD / Ok tuşları &nbsp; <strong>Bak:</strong> Fare / Sürükle &nbsp; <strong>Eser:</strong> Tıkla &nbsp; <strong>Çık:</strong> ESC';
       el('gal3d-hint').classList.remove('hidden');
-      el('gal3d-minimap-wrap').classList.remove('hidden');
+      el('gal3d-minimap-wrap').classList.toggle('hidden', state.isMobile);
       const schoolName = typeof SCHOOL_NAME !== 'undefined' ? SCHOOL_NAME : 'Sanal Sergi';
       const badgeSchool = el('gal3d-badge-school');
       if (badgeSchool) badgeSchool.textContent = schoolName;
@@ -519,14 +625,7 @@
       el('gal3d-exhibition-name').title = exhibitionName;
 
       setupScene(container);
-      const rooms = GalleryLayout.plan(images.length).roomCount;
-      const roomSelect = el('gal3d-room-select');
-      roomSelect.replaceChildren();
-      for (let i = 0; i < rooms; i++) roomSelect.add(new Option('Salon ' + (i + 1) + ' / ' + rooms, String(i)));
-      showRoom(0);
-      listen(roomSelect, 'change', () => showRoom(Number(roomSelect.value)));
-      listen(el('gal3d-room-prev'), 'click', () => { showRoom(state.roomIndex - 1); roomSelect.focus(); });
-      listen(el('gal3d-room-next'), 'click', () => { showRoom(state.roomIndex + 1); roomSelect.focus(); });
+      showRoom();
       listen(el('gal3d-inspect'), 'click', () => inspectArtwork(Number(el('gal3d-artwork-select').value)));
 
       if (state.isMobile) {
@@ -536,6 +635,11 @@
       }
 
       listen(window, 'resize', () => onResize(container));
+      if (window.visualViewport) listen(window.visualViewport, 'resize', () => onResize(container));
+      if (typeof ResizeObserver !== 'undefined') {
+        run.resizeObserver = new ResizeObserver(() => onResize(container));
+        run.resizeObserver.observe(container);
+      }
 
       clock = new THREE.Clock();
       loading.classList.add('hidden');
@@ -558,6 +662,7 @@
     state.active = false;
     run.controller.abort();
     run.roomController?.abort();
+    run.resizeObserver?.disconnect();
     resetControls();
     cancelAnimationFrame(raf);
     raf = null;
@@ -566,6 +671,7 @@
     if (document.pointerLockElement === container) document.exitPointerLock();
     disposeObjects([scene]);
     run.room = null;
+    if (run.pendingModels === 0) run.dracoLoader?.dispose();
     if (renderer) {
       renderer.dispose();
       if (renderer.domElement.parentNode === container) container.removeChild(renderer.domElement);
@@ -573,6 +679,8 @@
     scene = null; camera = null; renderer = null; clock = null;
     state.frames = [];
     state.images = [];
+    state.partitions = [];
+    state.obstacles = [];
 
     el('gal3d-overlay').classList.add('hidden');
     run.releaseModal();
