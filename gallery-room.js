@@ -18,31 +18,9 @@
     const oak = new THREE.MeshStandardMaterial({ color: 0xa88762, roughness: 0.9 });
     const ceiling = new THREE.MeshBasicMaterial({ color: 0xe2e3df });
     const glow = new THREE.MeshBasicMaterial({ color: 0xfff5df, toneMapped: false });
-    const glass = new THREE.MeshPhysicalMaterial({
-      color: 0xbfd7dc, roughness: 0.08, metalness: 0, transparent: true,
-      opacity: 0.34, transmission: 0.18, side: THREE.DoubleSide, depthWrite: false
-    });
-    const windowSky = new THREE.ShaderMaterial({
-      side: THREE.DoubleSide, toneMapped: false,
-      uniforms: {
-        daylight: { value: 1 }, dusk: { value: 0 }, sunX: { value: 0 }, sunHeight: { value: 1 }
-      },
-      vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: `
-        uniform float daylight; uniform float dusk; uniform float sunX; uniform float sunHeight; varying vec2 vUv;
-        float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-        void main() {
-          vec3 night = mix(vec3(0.025, 0.045, 0.09), vec3(0.07, 0.13, 0.2), 1.0 - vUv.y);
-          vec3 day = mix(vec3(0.38, 0.63, 0.82), vec3(0.94, 0.82, 0.62), 1.0 - vUv.y);
-          vec3 color = mix(night, day, daylight);
-          color += vec3(0.42, 0.12, 0.035) * dusk * pow(1.0 - vUv.y, 3.0);
-          vec2 sun = vec2(0.5 + sunX * 0.34, 0.2 + sunHeight * 0.58);
-          float disc = 1.0 - smoothstep(0.025, 0.055, distance(vUv, sun));
-          color += vec3(1.0, 0.72, 0.38) * disc * (daylight + dusk) * 0.75;
-          float star = step(0.993, hash(floor(vUv * vec2(95.0, 70.0)))) * step(0.22, vUv.y);
-          color += vec3(star * (1.0 - daylight) * 0.75);
-          gl_FragColor = vec4(color, 1.0);
-        }`
+    const glass = new THREE.MeshStandardMaterial({
+      color: 0xdce9e9, roughness: 0.15, metalness: 0.08, transparent: true,
+      opacity: 0.08, side: THREE.DoubleSide, depthWrite: false
     });
     function box(x, y, z, sx, sy, sz, material, castShadow = true) {
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), material);
@@ -97,14 +75,13 @@
       box(centerX, openingBottom / 2, d / 2 + 0.1, sideSpan, openingBottom, 0.2, wall);
       box(centerX, (openingTop + h) / 2, d / 2 + 0.1, sideSpan, h - openingTop, 0.2, wall);
       for (const edge of [-1, 1]) box(centerX + edge * (openingWidth / 2 + 0.12), (openingBottom + openingTop) / 2, d / 2 + 0.1, 0.24, openingTop - openingBottom, 0.2, wall);
-      const sky = new THREE.Mesh(new THREE.PlaneGeometry(openingWidth, openingTop - openingBottom), windowSky);
-      sky.position.set(centerX, (openingBottom + openingTop) / 2, d / 2 + 0.16); sky.rotation.y = Math.PI; group.add(sky);
+      // Camın arkasına resim yapıştırılmaz; bütün pencereler aynı 3D çevreye bakar.
       const pane = new THREE.Mesh(new THREE.PlaneGeometry(openingWidth, openingTop - openingBottom), glass);
       pane.position.set(centerX, (openingBottom + openingTop) / 2, d / 2 + 0.05); pane.rotation.y = Math.PI; pane.renderOrder = 2; group.add(pane);
       box(centerX, (openingBottom + openingTop) / 2, d / 2 + 0.025, 0.045, openingTop - openingBottom, 0.035, trim, false);
       box(centerX, openingBottom + (openingTop - openingBottom) * 0.53, d / 2 + 0.025, openingWidth, 0.045, 0.035, trim, false);
     }
-    group.userData.dayNight = { skyMaterial: windowSky, glassMaterial: glass };
+    group.userData.dayNight = { glassMaterial: glass };
     // İnce gölge derzi, açık meşe üst bant ve duvar boyunca ışık çizgisi.
     for (const z of [-d / 2 + 0.025, d / 2 - 0.025]) {
       box(0, 0.08, z, w, 0.16, 0.05, trim);

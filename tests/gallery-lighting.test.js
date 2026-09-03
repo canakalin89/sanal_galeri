@@ -28,12 +28,22 @@ test('cok buyuk prosedurel salonlarda GPU butcesi sinirsiz buyumez', () => {
 });
 
 test('gercek saat dongusu oglen dogal isigi, gece ic aydinlatmayi one cikarir', () => {
-  const morning = dayCycle(new Date(2026, 5, 1, 8, 0));
-  const noon = dayCycle(new Date(2026, 5, 1, 12, 0));
-  const evening = dayCycle(new Date(2026, 5, 1, 17, 0));
-  const midnight = dayCycle(new Date(2026, 5, 1, 0, 0));
+  const morning = dayCycle(new Date('2026-06-01T05:00:00Z'));
+  const noon = dayCycle(new Date('2026-06-01T09:00:00Z'));
+  const evening = dayCycle(new Date('2026-06-01T14:00:00Z'));
+  const midnight = dayCycle(new Date('2026-05-31T21:00:00Z'));
   assert.ok(noon.sunIntensity > morning.sunIntensity && morning.sunIntensity > midnight.sunIntensity);
   assert.ok(midnight.interiorFactor > noon.interiorFactor);
   assert.ok(morning.sunX < 0 && evening.sunX > 0);
   assert.equal(midnight.label, 'Gece');
+  assert.equal(noon.time, '12:00');
+  assert.equal(midnight.time, '00:00');
+});
+
+test('saglayicinin mevsimsel gunes saatleri 06-18 yaklasiminin yerini alir', () => {
+  const summer = [[Date.parse('2026-06-01T02:30:00Z'), Date.parse('2026-06-01T17:45:00Z')]];
+  const late = new Date('2026-06-01T16:00:00Z');
+  assert.equal(dayCycle(late).daylight, 0);
+  assert.ok(dayCycle(late, summer).daylight > 0.9);
+  assert.equal(dayCycle(new Date('2026-06-01T20:00:00Z'), summer).daylight, 0);
 });
