@@ -150,6 +150,9 @@ birlikte güncelleyin.
 - artwork-tools.js: Türkçe arama, sanatçı filtresi ve kalıcı eser bağlantıları
 - gallery3d.js: 3D oturumu, mobil/masaüstü kontroller, eser ve dekor yüklemeleri
 - gallery-layout.js / gallery-lighting.js / gallery-room.js: deterministik salon planı, cihaz kalite profili ve prosedürel mimari
+- gallery-neighborhood.js / assets/environment/kapakli.json: okul konumuna göre açık harita geometrileri ve dış çevre
+- gallery-weather.js / gallery-atmosphere.js: hava verisi doğrulaması, dış yağış ve isteğe bağlı ses
+- api/weather.js / server/weather.js: yalnızca okul için önbellekli Open-Meteo verisi
 - vendor/: yerel Three.js, GLTF/Draco yükleyicileri ve seçilmiş dekor modelleri
 - THIRD_PARTY_ASSETS.md: kullanılan 3D modellerin kaynak ve lisans bilgileri
 - admin.html / admin-app.js / admin-state.js: yönetim arayüzü ve veri koruma
@@ -198,12 +201,48 @@ Eserler en fazla dört eşzamanlı görsel isteğiyle yüklenir. Görsel yüklem
 için seçilebilir hata yüzeyi kalır. Salon, yumuşak yönlü gölge, tavandan sıcak
 spotlar, avize ışıkları, çevresel malzeme yansıması ve mobilya temas gölgesi
 shader'ı kullanır. Güneş yönü, gökyüzü, gün doğumu/batımı rengi ve iç ışık
-dengesi tarayıcının gerçek yerel saatine göre hesaplanır; dakikada bir yenilenir.
-Gece pencerelerde yıldızlı koyu gökyüzü görünür ve iç aydınlatma güçlenir.
+dengesi okulun Europe/Istanbul saatine ve hava servisinin gün doğumu/batımı
+saatlerine göre hesaplanır; dakikada bir yenilenir. Hava servisi yoksa yaklaşık
+06.00–18.00 güneş döngüsü kullanılır. Gece dış gökyüzü koyulaşır, bazı komşu
+bina pencereleri yanar ve iç aydınlatma güçlenir.
 Statik gölge haritası yalnızca sahne veya güneş konumu değiştiğinde yenilenir.
 Mobilde piksel oranı, gölge çözünürlüğü ve ışık sayısı sınırlanır; masaüstünde
 daha yüksek kalite profili seçilir. Eser dokuları ton eşleme ve renkli ışık
 etkisinden bağımsız gösterilir.
+
+### Okul çevresi ve hava durumu
+
+Konum, [okulun resmî iletişim sayfasındaki](https://azizsancaranadolu.meb.k12.tr/meb_iys_dosyalar/59/11/765062/okulumuz_hakkinda.html)
+harita bağlantısından alınmıştır: 41.3107562, 27.9523363; Karaağaç Mahallesi,
+Kapaklı / Tekirdağ. Pencerelerin dışında OpenStreetMap'in 3 Eylül 2026 tarihli
+yol ve bina tabanları kullanılır. Binalar, sanayi alanları, okul bahçesi ve
+haritada işaretli ağaçlar aynı koordinat düzenindedir. Bu bir fotoğraf veya
+birebir bina taraması değildir: cepheler, çatılar ve eksik yükseklikler temsildir;
+arazi düz, sanal salon dış zeminden bir kat yüksekte kabul edilir. Salonla
+çakışan gerçek bina tabanları ayıklanır. Mobilde en yakın 180, masaüstünde 280
+bina sınırı ve malzemeye göre birleştirilmiş geometriler kullanılır.
+Yaklaşık 97 KB harita verisi yalnızca 3D açıldığında yerelden yüklenir.
+Kaynak, ODbL lisansı ve yeniden üretme bilgileri THIRD_PARTY_ASSETS.md içindedir.
+
+`/api/weather`, sabit okul koordinatı için Open-Meteo'nun 15 dakikalık model
+verisini getirir; okulda ölçüm istasyonu veya canlı kamera bulunduğu anlamına
+gelmez. Veri saati ve kaynak 3D araç çubuğunda görünür. Ziyaretçinin konumu
+istenmez, anahtar gerekmez. Hava 10 dakikada bir yenilenir; sunucu aynı süre
+önbellek ve eşzamanlı istek birleştirmesi, CDN 10 dakika önbellek kullanır.
+Sekiz saniyelik zaman aşımı, başarısız yanıt veya bir saatten eski veride
+yağış/fırtına efektleri kapatılır ve güncel veri alınamadığı belirtilir.
+
+Bulut, görüş mesafesi ve güneş şiddeti veriye uyar; yağmur/kar yalnızca
+camların dışında düşer, yağmurda dış zemin daha parlak görünür. Yalnızca WMO
+95/96/99 kodlarında seyrek ve tek geçişli şimşek ile gök gürültüsü oluşur;
+bu efektler gerçek bir yıldırımın anlık yerini/zamanını göstermez. Yağmur ve
+gök gürültüsü sesi başlangıçta kapalıdır, düğmeyle açılır. Ses kapatıldığında,
+sekme gizlendiğinde veya galeri kapandığında bekleyen gök gürültüleri iptal
+edilir. Hareket azaltma tercihi yağış animasyonunu ve şimşeği kapatır.
+Galeri kapanınca istekler, zamanlayıcılar, ses ve 3D kaynakları temizlenir.
+Open-Meteo ücretsiz servisi ticari olmayan eğitim kullanımı içindir; ticari
+kullanıma geçilirse sağlayıcının kullanım koşulları yeniden değerlendirilmelidir.
+
 3D salonda görünür esere tıklamak/dokunmak büyük görsel, başlık, açıklama,
 sanatçı ve paylaşım bağlantısını açar. Fare kilitliyken ekran merkezindeki
 işaret kullanılır. Bu salondaki eser listesinden İncele düğmesiyle de aynı pencere açılır.

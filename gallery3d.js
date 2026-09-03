@@ -251,6 +251,56 @@
     for (let i = 0; i < Math.min(4, tasks.length); i++) worker().catch(() => {});
   }
 
+  async function enhanceNeighborhood(plan, run) {
+    const controller = new AbortController(); run.neighborhoodController = controller;
+    const timer = setTimeout(() => controller.abort(), 8000);
+    try {
+      const [response, utils] = await Promise.all([
+        fetch('/assets/environment/kapakli.json', { signal: controller.signal }),
+        import('/vendor/utils/BufferGeometryUtils.js')
+      ]);
+      if (!response.ok) throw new Error('Çevre yüklenemedi.');
+      const data = await response.json();
+      if (!isCurrent(run)) return;
+      GalleryNeighborhood.populate(THREE, run.neighborhood, data, plan, state.isMobile, utils.mergeGeometries);
+      el('gal3d-environment-status').textContent = 'Karaağaç / Kapaklı · Yaklaşık 3D çevre';
+      updateDayNightCycle(plan, run);
+    } catch {
+      if (isCurrent(run)) el('gal3d-environment-status').textContent = 'Çevre yüklenemedi; salon kullanılabilir';
+    } finally { clearTimeout(timer); }
+  }
+
+  function weatherStatus(run, message) {
+    const status = el('gal3d-weather-status');
+    if (!status) return;
+    if (!run.weather) { status.textContent = message || 'Hava verisi alınamadı'; status.title = 'Güncel veri yok; yağış ve fırtına efektleri kapalı.'; return; }
+    const report = run.weather, description = GalleryWeather.describe(report);
+    const time = new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', hour: '2-digit', minute: '2-digit' }).format(report.observedAt);
+    status.textContent = `${Math.round(report.temperature)}°C · ${description.label} · ${time}`;
+    status.title = 'Kapaklı için Open-Meteo model verisi; yerinde ölçüm veya canlı kamera değildir. Veri saati: ' + time;
+  }
+
+  async function refreshWeather(run) {
+    if (!isCurrent(run) || run.weatherLoading) return;
+    run.weatherLoading = true;
+    const controller = new AbortController(); run.weatherController = controller;
+    const timer = setTimeout(() => controller.abort(), 8000);
+    try {
+      const response = await fetch('/api/weather', { signal: controller.signal });
+      if (!response.ok) throw new Error('Hava verisi alınamadı.');
+      const report = GalleryWeather.validate(await response.json());
+      if (!isCurrent(run)) return;
+      run.weather = report; run.weatherUpdatedAt = Date.now();
+      run.atmosphere.setWeather(report); weatherStatus(run);
+      updateDayNightCycle(run.plan, run);
+    } catch {
+      if (!isCurrent(run)) return;
+      run.weather = null; run.atmosphere.setWeather(null);
+      weatherStatus(run, 'Hava verisi alınamadı · efektler kapalı');
+      updateDayNightCycle(run.plan, run);
+    } finally { clearTimeout(timer); run.weatherLoading = false; }
+  }
+
   function setupScene(container) {
     const run = session;
     const plan = GalleryLayout.plan(state.images.length);
@@ -263,7 +313,8 @@
     });
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0xdedfdc);
-    camera = new THREE.PerspectiveCamera(62, container.clientWidth / container.clientHeight, 0.1, Math.max(80, Math.hypot(plan.width, plan.depth) * 1.25));
+    scene.fog = new THREE.Fog(0xbbcbd2, 80, 1150);
+    camera = new THREE.PerspectiveCamera(62, container.clientWidth / container.clientHeight, 0.1, Math.max(1600, Math.hypot(plan.width, plan.depth) * 1.25));
     renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     renderer.setPixelRatio(run.quality.pixelRatio);
     renderer.setSize(container.clientWidth, container.clientHeight);
@@ -284,7 +335,7 @@
       panel.position.set(x, y, z); panel.rotation.set(rx, ry, 0); environmentScene.add(panel);
     }
     const pmrem = new THREE.PMREMGenerator(renderer);
-    run.environmentTarget = pmrem.fromScene(environmentScene, 0.08);
+    run.environmentTarget = pmrem.fromScene(environmentScene, 0.02);
     scene.environment = run.environmentTarget.texture;
     disposeObjects([environmentScene]);
     pmrem.dispose();
@@ -303,6 +354,7 @@
       const loading = el('gal3d-loading');
       loading.querySelector('p').textContent = 'Salon hazırlanıyor…';
       loading.classList.add('hidden');
+      renderer.shadowMap.needsUpdate = true;
       clock.start();
       animate();
     });
@@ -366,12 +418,17 @@
   }
 
   function updateDayNightCycle(plan, run) {
-    const cycle = GalleryLighting.dayCycle(new Date());
+    if (run.weather) {
+      try { GalleryWeather.validate(run.weather); }
+      catch { run.weather = null; run.atmosphere?.setWeather(null); weatherStatus(run, 'Hava verisi eskidi · efektler kapalı'); }
+    }
+    const conditions = run.weather ? GalleryWeather.describe(run.weather) : null;
+    const cycle = GalleryLighting.dayCycle(new Date(), run.weather?.sun || []);
     const { hemisphere, sun, fill, ceilingLights, lamps } = run.dayNightLights;
     hemisphere.intensity = cycle.hemisphereIntensity;
     hemisphere.color.set(0xbfdcff).lerp(new THREE.Color(0xf8fbff), cycle.daylight);
     hemisphere.groundColor.set(0x242a31).lerp(new THREE.Color(0x77736b), cycle.daylight);
-    sun.intensity = cycle.sunIntensity;
+    sun.intensity = cycle.sunIntensity * (1 - (conditions?.cloud || 0) * 0.86);
     sun.color.set(0xffa35c).lerp(new THREE.Color(0xfff4df), cycle.sunHeight);
     sun.position.set(cycle.sunX * run.quality.shadowExtent * 0.82, plan.height + cycle.sunHeight * run.quality.shadowExtent, plan.depth / 2 + run.quality.shadowExtent * 0.62);
     fill.intensity = 0.08 + cycle.daylight * 0.24;
@@ -382,20 +439,20 @@
     const dayBackground = new THREE.Color(0xdedfdc);
     scene.background.copy(nightBackground).lerp(dayBackground, cycle.daylight);
     if (cycle.dusk > 0.15) scene.background.lerp(new THREE.Color(0xc97855), cycle.dusk * 0.28);
+    scene.fog.color.set(0x15202d).lerp(new THREE.Color(conditions?.rain || conditions?.fog ? 0x9ca7aa : 0xbbcbd2), cycle.daylight);
+    scene.fog.far = Math.max(100, Math.min(1150, run.weather?.visibility ?? 1150));
+    scene.fog.near = Math.min(80, scene.fog.far * 0.35);
     renderer.toneMappingExposure = 1.02 - cycle.daylight * 0.06;
 
     const dayNight = run.room?.userData.dayNight;
     if (dayNight) {
-      dayNight.skyMaterial.uniforms.daylight.value = cycle.daylight;
-      dayNight.skyMaterial.uniforms.dusk.value = cycle.dusk;
-      dayNight.skyMaterial.uniforms.sunX.value = cycle.sunX;
-      dayNight.skyMaterial.uniforms.sunHeight.value = cycle.sunHeight;
-      dayNight.glassMaterial.opacity = 0.48 - cycle.daylight * 0.16;
+      dayNight.glassMaterial.opacity = 0.14 - cycle.daylight * 0.06;
     }
+    if (run.neighborhood) GalleryNeighborhood.update(THREE, run.neighborhood, cycle, sun.position, conditions);
     const exhibitionBadge = el('gal3d-exhibition-name');
     if (exhibitionBadge) {
       exhibitionBadge.textContent = `${run.exhibitionName} · ${cycle.label} ${cycle.time}`;
-      exhibitionBadge.title = `Aydınlatma tarayıcının yerel saatine göre: ${cycle.time}`;
+      exhibitionBadge.title = `Okulun saati (Europe/Istanbul): ${cycle.time}`;
     }
     renderer.shadowMap.needsUpdate = true;
   }
@@ -434,10 +491,16 @@
     const room = GalleryRoom.create(THREE, plan, run.exhibitionName, run.schoolName);
     run.room = room;
     scene.add(room);
+    run.neighborhood = GalleryNeighborhood.create(THREE, plan);
+    scene.add(run.neighborhood);
+    run.atmosphere = GalleryAtmosphere.create(THREE, scene, plan, state.isMobile);
     tuneRoomMaterials(room);
     configureLighting(plan, run);
     enhanceRoomWithModels(room, plan, run);
     placeArtworks(room, plan, run);
+    enhanceNeighborhood(plan, run);
+    refreshWeather(run);
+    run.weatherTimer = setInterval(() => { if (!document.hidden) refreshWeather(run); }, GalleryWeather.REFRESH_MS);
     renderer.shadowMap.needsUpdate = true;
     setupArtworkPicker(plan);
   }
@@ -704,6 +767,7 @@
     raf = requestAnimationFrame(animate);
     const dt = Math.min(0.05, clock.getDelta());
     updateMovement(dt);
+    session.atmosphere?.tick(dt);
     renderer.render(scene, camera);
 
     minimapFrameCount++;
@@ -729,12 +793,19 @@
     resetControls();
     overlay.classList.remove('hidden');
     loading.classList.remove('hidden');
+    el('gal3d-weather-status').textContent = 'Hava durumu yükleniyor…';
+    el('gal3d-weather-status').title = '';
+    el('gal3d-environment-status').textContent = 'Karaağaç çevresi yükleniyor…';
     el('gal3d-artwork-picker').classList.add('hidden');
     el('gal3d-aim').classList.add('hidden');
     run.releaseModal = window.activateGalleryModal(overlay);
     listen(window, 'keydown', escListener);
     listen(window, 'blur', resetControls);
-    listen(document, 'visibilitychange', () => { if (document.hidden) resetControls(); });
+    listen(document, 'visibilitychange', () => {
+      if (document.hidden) resetControls();
+      run.atmosphere?.setVisible(!document.hidden);
+      if (!document.hidden && run.atmosphere && Date.now() - (run.weatherUpdatedAt || 0) > GalleryWeather.REFRESH_MS) refreshWeather(run);
+    });
 
     try {
       await loadThree();
@@ -763,6 +834,15 @@
 
       setupScene(container);
       showRoom();
+      const sound = el('gal3d-weather-sound');
+      sound.setAttribute('aria-pressed', 'false'); sound.textContent = 'Ses kapalı';
+      listen(sound, 'click', async () => {
+        sound.disabled = true;
+        const enabled = await run.atmosphere.setSound(sound.getAttribute('aria-pressed') !== 'true');
+        sound.disabled = false;
+        if (!isCurrent(run)) return;
+        sound.setAttribute('aria-pressed', String(enabled)); sound.textContent = enabled ? 'Ses açık' : 'Ses kapalı';
+      });
       listen(el('gal3d-inspect'), 'click', () => inspectArtwork(Number(el('gal3d-artwork-select').value)));
 
       if (state.isMobile) {
@@ -800,6 +880,10 @@
     run.controller.abort();
     run.roomController?.abort();
     clearInterval(run.dayCycleTimer);
+    clearInterval(run.weatherTimer);
+    run.weatherController?.abort();
+    run.neighborhoodController?.abort();
+    run.atmosphere?.dispose();
     run.resizeObserver?.disconnect();
     resetControls();
     cancelAnimationFrame(raf);
