@@ -16,7 +16,6 @@
     wall.customProgramCacheKey = () => 'gallery-plaster-v1';
     const trim = new THREE.MeshStandardMaterial({ color: 0x303a3c, roughness: 0.8 });
     const oak = new THREE.MeshStandardMaterial({ color: 0xa88762, roughness: 0.9 });
-    const ceiling = new THREE.MeshBasicMaterial({ color: 0xe2e3df });
     const glow = new THREE.MeshBasicMaterial({ color: 0xfff5df, toneMapped: false });
     const glass = new THREE.MeshStandardMaterial({
       color: 0xdce9e9, roughness: 0.15, metalness: 0.08, transparent: true,
@@ -59,7 +58,8 @@
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     group.add(floor);
-    box(0, h + 0.06, 0, w + 0.3, 0.12, d + 0.3, ceiling, false);
+    const roof = GalleryRoof.create(THREE, plan);
+    group.add(roof);
     box(0, h / 2, -d / 2 - 0.1, w + 0.4, h, 0.2, wall);
     box(-w / 2 - 0.1, h / 2, 0, 0.2, h, d, wall);
     box(w / 2 + 0.1, h / 2, 0, 0.2, h, d, wall);
@@ -81,7 +81,7 @@
       box(centerX, (openingBottom + openingTop) / 2, d / 2 + 0.025, 0.045, openingTop - openingBottom, 0.035, trim, false);
       box(centerX, openingBottom + (openingTop - openingBottom) * 0.53, d / 2 + 0.025, openingWidth, 0.045, 0.035, trim, false);
     }
-    group.userData.dayNight = { glassMaterial: glass };
+    group.userData.dayNight = { glassMaterial: glass, roofGlassMaterial: roof.userData.glassMaterial };
     // İnce gölge derzi, açık meşe üst bant ve duvar boyunca ışık çizgisi.
     for (const z of [-d / 2 + 0.025, d / 2 - 0.025]) {
       box(0, 0.08, z, w, 0.16, 0.05, trim);
@@ -154,23 +154,13 @@
       fallback.position.set(chandelier.x, 0, chandelier.z); group.add(fallback);
     }
 
-    // Her koridorun üzerindeki tekrarlayan paneller salonun tamamını ritmik biçimde aydınlatır.
-    const boundaries = [-w / 2, ...plan.partitions.map(partition => partition.x), w / 2];
-    for (let z = -d / 2 + 2; z <= d / 2 - 1.5; z += 3) {
-      for (let i = 0; i < boundaries.length - 1; i++) {
-        const center = (boundaries[i] + boundaries[i + 1]) / 2;
-        const panelWidth = Math.min(boundaries[i + 1] - boundaries[i] - 1.1, 4.8);
-        box(center, h - 0.045, z, panelWidth, 0.06, 0.85, trim);
-        box(center, h - 0.083, z, panelWidth - 0.1, 0.012, 0.74, glow, false);
-      }
-    }
     // Giriş duvarı sabit bir kimlik alanıdır; ortada görüşü kesen pano yok.
     const sign = document.createElement('canvas'); sign.width = 1200; sign.height = 420;
     const text = sign.getContext('2d');
     text.fillStyle = '#263d47'; text.fillRect(0, 0, 1200, 420);
-    text.fillStyle = '#c5aa83'; text.fillRect(64, 55, 70, 6);
+    text.fillStyle = '#c5aa83'; text.fillRect(225, 55, 70, 6);
     text.fillStyle = '#e8e6de';
-    text.font = '24px sans-serif'; text.fillText(schoolName, 64, 112, 1072);
+    text.font = '24px sans-serif'; text.fillText(schoolName, 225, 112, 911);
     text.font = '500 52px sans-serif';
     // Uzun isimler iki satıra bölünür; tam metin ayrıca HTML başlıkta bulunur.
     const words = exhibitionName.split(/\s+/); let line = '', row = 0;
@@ -186,6 +176,9 @@
     const plaque = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.19), new THREE.MeshBasicMaterial({ map: texture, toneMapped: false }));
     plaque.position.set(0, 1.9, d / 2 - 0.06); plaque.rotation.y = Math.PI;
     group.add(plaque);
+    const logo = new THREE.Mesh(new THREE.PlaneGeometry(0.38, 0.38), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, toneMapped: false }));
+    logo.position.set(-1.31, 0.33, 0.009); logo.userData.secretLogo = true;
+    plaque.add(logo); group.userData.entranceLogo = logo;
     // Düşey ahşap çıtalar giriş alanını tanımlar; yürüyüş sınırının dışındadır.
     for (const side of [-1, 1]) for (let i = 0; i < 4; i++) box(side * (1.72 + i * 0.11), 1.95, d / 2 - 0.035, 0.045, 2.55, 0.07, oak);
     return group;

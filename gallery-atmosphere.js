@@ -1,10 +1,14 @@
-// Yağış yalnızca camların dışındaki hacimdedir; ses açıkça kullanıcı tarafından açılır.
+// Yağış cephe camlarının dışında ve cam çatının üstündedir; ses kullanıcı tarafından açılır.
 (function () {
   function create(THREE, scene, plan, mobile) {
     const count = mobile ? 400 : 900;
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const group = new THREE.Group(); group.name = 'Okul hava durumu'; scene.add(group);
-    const particles = Array.from({ length: count }, () => ({ x: (Math.random() - 0.5) * (plan.width + 60), y: Math.random() * 38 - 4, z: plan.depth / 2 + 0.7 + Math.random() * 65 }));
+    const roof = GalleryRoof.layout(plan);
+    // Ön cephe ve çatı aynı toplam parçacık bütçesini paylaşır.
+    const particles = Array.from({ length: count }, (_, index) => index % 3 === 0
+      ? { overhead: true, x: (Math.random() - 0.5) * plan.width, y: roof.ridgeHeight + 0.3 + Math.random() * 14, z: (Math.random() - 0.5) * plan.depth }
+      : { overhead: false, x: (Math.random() - 0.5) * (plan.width + 60), y: Math.random() * 38 - 4, z: plan.depth / 2 + 0.7 + Math.random() * 65 });
     const rainPositions = new Float32Array(count * 6), snowPositions = new Float32Array(count * 3);
     const rainGeometry = new THREE.BufferGeometry(); rainGeometry.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3).setUsage(THREE.DynamicDrawUsage));
     const rain = new THREE.LineSegments(rainGeometry, new THREE.LineBasicMaterial({ color: 0xc1d4de, transparent: true, opacity: 0.32, depthWrite: false }));
@@ -76,12 +80,18 @@
         const wx = -Math.sin(angle) * wind, wz = Math.cos(angle) * wind;
         particles.forEach((p, i) => {
           p.y -= dt * (weather.snow ? 1.7 : 18); p.x += wx * dt; p.z += wz * dt;
-          if (p.y < -4) p.y = 34;
-          if (Math.abs(p.x) > (plan.width + 60) / 2) p.x *= -0.98;
-          const near = plan.depth / 2 + 0.7;
-          if (p.z < near) p.z = near + 64; else if (p.z > near + 65) p.z = near;
-          snowPositions.set([p.x, p.y, p.z], i * 3);
-          rainPositions.set([p.x, p.y, p.z, p.x - wx * 0.04, p.y + 0.8, p.z - wz * 0.04], i * 6);
+          if (p.overhead) GalleryRoof.confineParticle(roof, p);
+          else {
+            if (p.y < -4) p.y = 34;
+            if (Math.abs(p.x) > (plan.width + 60) / 2) p.x *= -0.98;
+            const near = plan.depth / 2 + 0.7;
+            if (p.z < near) p.z = near + 64; else if (p.z > near + 65) p.z = near;
+          }
+          const s = i * 3, r = i * 6;
+          snowPositions[s] = rainPositions[r] = p.x;
+          snowPositions[s+1] = rainPositions[r+1] = p.y;
+          snowPositions[s+2] = rainPositions[r+2] = p.z;
+          rainPositions[r+3] = p.x - wx * 0.04; rainPositions[r+4] = p.y + 0.8; rainPositions[r+5] = p.z - wz * 0.04;
         });
         rainGeometry.attributes.position.needsUpdate = rain.visible;
         snowGeometry.attributes.position.needsUpdate = snow.visible;

@@ -108,7 +108,7 @@
 
     <div class="gal3d-topbar">
     <div class="gal3d-badge">
-      <img src="/assets/logo.png" alt="" />
+      <button class="gal3d-school-seal" id="gal3d-school-seal" type="button" aria-label="Okul logosu"><img src="/assets/logo.png" alt="" /></button>
       <div class="gal3d-badge-text">
         <span id="gal3d-badge-school"></span>
         <span class="gal3d-badge-sub" id="gal3d-exhibition-name"></span>
@@ -139,6 +139,19 @@
       <button id="gal3d-inspect" type="button">İncele</button>
     </div>
     <div class="gal3d-aim hidden" id="gal3d-aim" aria-hidden="true">+</div>
+    <div class="gal3d-game-hit" id="gal3d-game-hit" aria-hidden="true"></div>
+    <div class="gal3d-game-screen hidden" id="gal3d-game-screen">
+      <strong id="gal3d-game-countdown" aria-live="polite"></strong>
+      <p id="gal3d-game-message" role="status"></p>
+    </div>
+    <div class="gal3d-game-hud hidden" id="gal3d-game-hud" aria-label="Oyun durumu">
+      <div class="gal3d-game-vitals"><span>CAN</span><strong id="gal3d-game-health-number">100%</strong><progress id="gal3d-game-health" max="100" value="100" aria-label="Can"></progress></div>
+      <div class="gal3d-game-sigil" aria-hidden="true">◆</div>
+      <div><span>DALGA</span><strong id="gal3d-game-wave">0</strong></div>
+      <div><span>TABLO</span><strong id="gal3d-game-score">0</strong></div>
+      <button id="gal3d-game-exit" type="button">Sergiye dön</button>
+    </div>
+    <button class="gal3d-game-fire hidden" id="gal3d-game-fire" type="button" aria-label="Mavi ateş at">ATEŞ<span>◆</span></button>
 
     <!-- Alt orta: mini harita -->
     <div class="gal3d-minimap-wrap hidden" id="gal3d-minimap-wrap">

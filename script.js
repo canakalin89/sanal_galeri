@@ -534,7 +534,7 @@ function loadGallery3DScript() {
   if (window.openGallery3D) return Promise.resolve();
   if (gallery3DLoading) return gallery3DLoading;
   gallery3DLoading = (async () => {
-    for (const source of ['gallery-layout.js', 'gallery-lighting.js', 'gallery-neighborhood.js', 'gallery-weather.js', 'gallery-atmosphere.js', 'gallery-room.js', 'gallery3d.js']) {
+    for (const source of ['gallery-layout.js', 'gallery-lighting.js', 'gallery-neighborhood.js', 'gallery-weather.js', 'gallery-roof.js', 'gallery-atmosphere.js', 'gallery-game.js', 'gallery-room.js', 'gallery3d.js']) {
       await new Promise((resolve, reject) => {
         const script = document.createElement('script');
         script.src = source;
