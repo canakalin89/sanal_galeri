@@ -149,7 +149,7 @@ birlikte güncelleyin.
 - gallery-data.js: ziyaretçi yanıt doğrulaması, ortak istekler ve kısa önbellek
 - artwork-tools.js: Türkçe arama, sanatçı filtresi ve kalıcı eser bağlantıları
 - gallery3d.js: 3D oturumu, mobil/masaüstü kontroller, eser ve dekor yüklemeleri
-- gallery-layout.js / gallery-room.js: deterministik salon planı ve prosedürel mimari
+- gallery-layout.js / gallery-lighting.js / gallery-room.js: deterministik salon planı, cihaz kalite profili ve prosedürel mimari
 - vendor/: yerel Three.js, GLTF/Draco yükleyicileri ve seçilmiş dekor modelleri
 - THIRD_PARTY_ASSETS.md: kullanılan 3D modellerin kaynak ve lisans bilgileri
 - admin.html / admin-app.js / admin-state.js: yönetim arayüzü ve veri koruma
@@ -178,8 +178,10 @@ Salon yüklenirken de kapatılabilir. Kapanışta eser/model yüklemeleri iptal
 edilir ve sahne kaynakları temizlenir. Geç tamamlanan görseller kapatılmış
 salona uygulanmaz.
 
-3D mimari tamamen prosedüreldir: açık taş zemin, kırık beyaz duvarlar,
-ince koyu çerçeve/paspartu, açık meşe bant ve düzenli tavan ışık panelleri.
+3D mimari tamamen prosedüreldir: kabartılı açık taş zemin, ince mineral doku
+shader'ı kullanan kırık beyaz duvarlar, koyu çerçeve/paspartu, açık meşe bant
+ve düzenli tavan ışık panelleri. Eser bulunmayan giriş cephesindeki iki
+çerçeveli pencere salonun dış gökyüzünü ve doğal ışığı gösterir.
 Koleksiyonun tamamı tek salonda kalır. Eser sayısı arttıkça salon içinde
 çift yüzlü sergi duvarları ve en az 4,4 metrelik koridorlar oluşur; 28 eser
 tek orta duvarlı, iki geniş koridorlu bir salona yerleşir. Eserler merkezleri
@@ -193,8 +195,15 @@ prosedürel karşılıkları görünür kalır.
 Yatay/dikey/kare eserler en fazla 2,1 × 2 m alana kırpılmadan sığar.
 Eserler en fazla dört eşzamanlı görsel isteğiyle yüklenir. Görsel yüklemesi
 15 saniyede kesilir; başarısız görsel
-için seçilebilir hata yüzeyi kalır. Sahnedeki üç ışık eser sayısından bağımsızdır;
-eser dokuları ton eşleme ve renkli ışık etkisinden bağımsız gösterilir.
+için seçilebilir hata yüzeyi kalır. Salon, yumuşak yönlü gölge, tavandan sıcak
+spotlar, avize ışıkları, çevresel malzeme yansıması ve mobilya temas gölgesi
+shader'ı kullanır. Güneş yönü, gökyüzü, gün doğumu/batımı rengi ve iç ışık
+dengesi tarayıcının gerçek yerel saatine göre hesaplanır; dakikada bir yenilenir.
+Gece pencerelerde yıldızlı koyu gökyüzü görünür ve iç aydınlatma güçlenir.
+Statik gölge haritası yalnızca sahne veya güneş konumu değiştiğinde yenilenir.
+Mobilde piksel oranı, gölge çözünürlüğü ve ışık sayısı sınırlanır; masaüstünde
+daha yüksek kalite profili seçilir. Eser dokuları ton eşleme ve renkli ışık
+etkisinden bağımsız gösterilir.
 3D salonda görünür esere tıklamak/dokunmak büyük görsel, başlık, açıklama,
 sanatçı ve paylaşım bağlantısını açar. Fare kilitliyken ekran merkezindeki
 işaret kullanılır. Bu salondaki eser listesinden İncele düğmesiyle de aynı pencere açılır.

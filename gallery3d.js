@@ -128,6 +128,13 @@
     const holder = new THREE.Group();
     for (const placement of placements) {
       const instance = model.clone(true);
+      instance.traverse(node => {
+        if (!node.isMesh) return;
+        node.castShadow = true;
+        node.receiveShadow = true;
+        const materials = Array.isArray(node.material) ? node.material : [node.material];
+        for (const material of materials) if (material?.isMeshStandardMaterial) material.envMapIntensity = 0.85;
+      });
       instance.position.x += placement.x;
       instance.position.z += placement.z;
       instance.position.y += yForSize ? yForSize(size) : 0;
@@ -136,6 +143,7 @@
     }
     replaceFallback(room, kind);
     room.add(holder);
+    if (renderer?.shadowMap) renderer.shadowMap.needsUpdate = true;
   }
 
   function enhanceRoomWithModels(room, plan, run) {
@@ -206,6 +214,7 @@
       room.add(frame);
       state.frames.push(frame);
       const border = new THREE.Mesh(new THREE.BoxGeometry(1.65, 2.05, 0.055), new THREE.MeshStandardMaterial({ color: 0x303638, roughness: 0.8 }));
+      border.castShadow = border.receiveShadow = true;
       const mount = new THREE.Mesh(new THREE.PlaneGeometry(1.59, 1.99), new THREE.MeshBasicMaterial({ color: 0xf3f1e9, toneMapped: false }));
       mount.position.z = 0.035;
       const canvas = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.8), new THREE.MeshBasicMaterial({ color: 0xd9deda, toneMapped: false }));
@@ -243,16 +252,42 @@
   }
 
   function setupScene(container) {
+    const run = session;
+    const plan = GalleryLayout.plan(state.images.length);
+    run.plan = plan;
+    run.quality = GalleryLighting.profile({
+      isMobile: state.isMobile,
+      devicePixelRatio: window.devicePixelRatio,
+      width: plan.width,
+      depth: plan.depth
+    });
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xe8e7e2);
-    camera = new THREE.PerspectiveCamera(62, container.clientWidth / container.clientHeight, 0.1, 80);
+    scene.background = new THREE.Color(0xdedfdc);
+    camera = new THREE.PerspectiveCamera(62, container.clientWidth / container.clientHeight, 0.1, Math.max(80, Math.hypot(plan.width, plan.depth) * 1.25));
     renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, state.isMobile ? 1.5 : 2));
+    renderer.setPixelRatio(run.quality.pixelRatio);
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1;
+    renderer.toneMappingExposure = 0.96;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = state.isMobile ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
+    renderer.shadowMap.autoUpdate = false;
     container.appendChild(renderer.domElement);
+
+    // Notr bir galeri ortam haritasi, metal/cam dekorlarda gercekci yansima verir.
+    const environmentScene = new THREE.Scene();
+    environmentScene.background = new THREE.Color(0xcfd3d0);
+    const environmentMaterial = new THREE.MeshBasicMaterial({ color: 0xf7f0df, side: THREE.DoubleSide });
+    for (const [x, y, z, rx, ry] of [[0, 4, -5, 0, 0], [-5, 2, 0, 0, Math.PI / 2], [5, 3, 2, 0, -Math.PI / 2]]) {
+      const panel = new THREE.Mesh(new THREE.PlaneGeometry(4, 2), environmentMaterial);
+      panel.position.set(x, y, z); panel.rotation.set(rx, ry, 0); environmentScene.add(panel);
+    }
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    run.environmentTarget = pmrem.fromScene(environmentScene, 0.08);
+    scene.environment = run.environmentTarget.texture;
+    disposeObjects([environmentScene]);
+    pmrem.dispose();
     // Mobil tarayıcı GPU belleğini geçici olarak bırakırsa sahneyi sessizce durdurup geri getir.
     listen(renderer.domElement, 'webglcontextlost', event => {
       event.preventDefault();
@@ -271,18 +306,117 @@
       clock.start();
       animate();
     });
-    // Sabit üç ışık; eser renkleri ışık/tone mapping etkisinden bağımsızdır.
-    scene.add(new THREE.HemisphereLight(0xffffff, 0xaaa79c, 2.2));
-    const key = new THREE.DirectionalLight(0xfffaf0, 1.5);
-    key.position.set(3, 7, 4); scene.add(key);
-    const fill = new THREE.DirectionalLight(0xf1f5ff, 0.7);
-    fill.position.set(-4, 5, -3); scene.add(fill);
+  }
+
+  function selectEvenly(items, count) {
+    if (count <= 0 || items.length === 0) return [];
+    if (count === 1) return [items[Math.floor(items.length / 2)]];
+    if (items.length <= count) return items;
+    return Array.from({ length: count }, (_, index) => items[Math.round(index * (items.length - 1) / (count - 1))]);
+  }
+
+  function configureLighting(plan, run) {
+    if (run.lights) { scene.remove(run.lights); disposeObjects([run.lights]); }
+    clearInterval(run.dayCycleTimer);
+    const lights = new THREE.Group();
+    run.lights = lights;
+    const hemisphere = new THREE.HemisphereLight(0xf8fbff, 0x77736b, 0.6);
+    lights.add(hemisphere);
+
+    const extent = run.quality.shadowExtent;
+    const sun = new THREE.DirectionalLight(0xfff2dc, 2.2);
+    sun.target.position.set(0, 0.15, 0);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(run.quality.shadowMapSize, run.quality.shadowMapSize);
+    Object.assign(sun.shadow.camera, { left: -extent, right: extent, top: extent, bottom: -extent, near: 0.1, far: extent * 2.4 + plan.height });
+    sun.shadow.camera.updateProjectionMatrix();
+    sun.shadow.bias = -0.00025;
+    sun.shadow.normalBias = 0.025;
+    sun.shadow.radius = run.quality.shadowRadius;
+    lights.add(sun, sun.target);
+
+    const fill = new THREE.DirectionalLight(0xdceaff, 0.32);
+    fill.position.set(-plan.width * 0.35, plan.height * 0.72, -plan.depth * 0.28);
+    lights.add(fill);
+
+    const ceilingLights = [];
+    const ceilingPositions = selectEvenly(plan.decor.chandeliers, run.quality.ceilingLightCount);
+    ceilingPositions.forEach((placement, index) => {
+      const ceilingLight = new THREE.SpotLight(0xffe8c4, state.isMobile ? 22 : 30, 7.5, 0.78, 0.82, 2);
+      const z = ceilingPositions.length === 1 ? 0 : (index % 2 ? -plan.depth * 0.22 : plan.depth * 0.22);
+      ceilingLight.position.set(placement.x, plan.height - 0.16, z);
+      ceilingLight.target.position.set(placement.x, 0, z);
+      lights.add(ceilingLight, ceilingLight.target);
+      ceilingLights.push(ceilingLight);
+    });
+
+    const lamps = [];
+    selectEvenly(plan.decor.chandeliers, run.quality.pointLightCount).forEach(placement => {
+      const lamp = new THREE.PointLight(0xffd9a0, state.isMobile ? 8 : 11, 5.5, 2);
+      lamp.position.set(placement.x, plan.height - 0.8, placement.z);
+      lights.add(lamp);
+      lamps.push(lamp);
+    });
+    scene.add(lights);
+    run.dayNightLights = { hemisphere, sun, fill, ceilingLights, lamps };
+    updateDayNightCycle(plan, run);
+    run.dayCycleTimer = setInterval(() => {
+      if (isCurrent(run)) updateDayNightCycle(plan, run);
+    }, 60000);
+  }
+
+  function updateDayNightCycle(plan, run) {
+    const cycle = GalleryLighting.dayCycle(new Date());
+    const { hemisphere, sun, fill, ceilingLights, lamps } = run.dayNightLights;
+    hemisphere.intensity = cycle.hemisphereIntensity;
+    hemisphere.color.set(0xbfdcff).lerp(new THREE.Color(0xf8fbff), cycle.daylight);
+    hemisphere.groundColor.set(0x242a31).lerp(new THREE.Color(0x77736b), cycle.daylight);
+    sun.intensity = cycle.sunIntensity;
+    sun.color.set(0xffa35c).lerp(new THREE.Color(0xfff4df), cycle.sunHeight);
+    sun.position.set(cycle.sunX * run.quality.shadowExtent * 0.82, plan.height + cycle.sunHeight * run.quality.shadowExtent, plan.depth / 2 + run.quality.shadowExtent * 0.62);
+    fill.intensity = 0.08 + cycle.daylight * 0.24;
+    ceilingLights.forEach(light => { light.intensity = (state.isMobile ? 22 : 30) * cycle.interiorFactor; });
+    lamps.forEach(light => { light.intensity = (state.isMobile ? 8 : 11) * cycle.interiorFactor; });
+
+    const nightBackground = new THREE.Color(0x07111e);
+    const dayBackground = new THREE.Color(0xdedfdc);
+    scene.background.copy(nightBackground).lerp(dayBackground, cycle.daylight);
+    if (cycle.dusk > 0.15) scene.background.lerp(new THREE.Color(0xc97855), cycle.dusk * 0.28);
+    renderer.toneMappingExposure = 1.02 - cycle.daylight * 0.06;
+
+    const dayNight = run.room?.userData.dayNight;
+    if (dayNight) {
+      dayNight.skyMaterial.uniforms.daylight.value = cycle.daylight;
+      dayNight.skyMaterial.uniforms.dusk.value = cycle.dusk;
+      dayNight.skyMaterial.uniforms.sunX.value = cycle.sunX;
+      dayNight.skyMaterial.uniforms.sunHeight.value = cycle.sunHeight;
+      dayNight.glassMaterial.opacity = 0.48 - cycle.daylight * 0.16;
+    }
+    const exhibitionBadge = el('gal3d-exhibition-name');
+    if (exhibitionBadge) {
+      exhibitionBadge.textContent = `${run.exhibitionName} · ${cycle.label} ${cycle.time}`;
+      exhibitionBadge.title = `Aydınlatma tarayıcının yerel saatine göre: ${cycle.time}`;
+    }
+    renderer.shadowMap.needsUpdate = true;
+  }
+
+  function tuneRoomMaterials(room) {
+    const anisotropy = Math.min(state.isMobile ? 4 : 8, renderer.capabilities.getMaxAnisotropy());
+    room.traverse(node => {
+      if (!node.isMesh) return;
+      const materials = Array.isArray(node.material) ? node.material : [node.material];
+      for (const material of materials) {
+        if (!material) continue;
+        if (material.isMeshStandardMaterial) material.envMapIntensity = 0.55;
+        for (const value of Object.values(material)) if (value?.isTexture) value.anisotropy = anisotropy;
+      }
+    });
   }
 
   function showRoom() {
     const run = session;
     if (!run || state.inspecting) return;
-    const plan = GalleryLayout.plan(state.images.length);
+    const plan = run.plan || GalleryLayout.plan(state.images.length);
     run.roomController?.abort();
     if (run.room) { scene.remove(run.room); disposeObjects([run.room]); }
     run.roomController = new AbortController();
@@ -300,8 +434,11 @@
     const room = GalleryRoom.create(THREE, plan, run.exhibitionName, run.schoolName);
     run.room = room;
     scene.add(room);
+    tuneRoomMaterials(room);
+    configureLighting(plan, run);
     enhanceRoomWithModels(room, plan, run);
     placeArtworks(room, plan, run);
+    renderer.shadowMap.needsUpdate = true;
     setupArtworkPicker(plan);
   }
 
@@ -311,7 +448,7 @@
     const height = Math.max(1, container.clientHeight);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, state.isMobile ? 1.5 : 2));
+    renderer.setPixelRatio(session?.quality?.pixelRatio || 1);
     renderer.setSize(width, height);
   }
 
@@ -662,6 +799,7 @@
     state.active = false;
     run.controller.abort();
     run.roomController?.abort();
+    clearInterval(run.dayCycleTimer);
     run.resizeObserver?.disconnect();
     resetControls();
     cancelAnimationFrame(raf);
@@ -670,6 +808,7 @@
     const container = el('gal3d-canvas-container');
     if (document.pointerLockElement === container) document.exitPointerLock();
     disposeObjects([scene]);
+    run.environmentTarget?.dispose();
     run.room = null;
     if (run.pendingModels === 0) run.dracoLoader?.dispose();
     if (renderer) {
