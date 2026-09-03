@@ -152,6 +152,7 @@ birlikte güncelleyin.
 - gallery-layout.js / gallery-lighting.js / gallery-room.js: deterministik salon planı, cihaz kalite profili ve prosedürel mimari
 - gallery-roof.js: cam fener tavanı, taşıyıcılar ve çatı üzerindeki yağış sınırı
 - gallery-game.js: oturuma özel gizli tablo oyunu; veri veya dosya yazmaz
+- gallery-figure.js: tablo dokulu stickman, eklemli yürüyüş ve asa animasyonu
 - gallery-neighborhood.js / assets/environment/kapakli.json: okul konumuna göre açık harita geometrileri ve dış çevre
 - gallery-weather.js / gallery-atmosphere.js: hava verisi doğrulaması, dış yağış ve isteğe bağlı ses
 - api/weather.js / server/weather.js: yalnızca okul için önbellekli Open-Meteo verisi
@@ -267,23 +268,32 @@ Kamera esere otomatik yaklaşmaz.
 3D sergi tanıtımındaki okul logosuna **17 kez** tıklayın/dokunun. Üst başlıktaki
 erişilebilir logo düğmesi (klavyeyle de kullanılabilir) ve giriş panosundaki
 aynı orijinal logo bu sayacı paylaşır. 3–2–1 sayımı sonrası tablolar yerlerinden
-ayrılır; ilk dalgada 1, sonra artan sayıda tablo saldırır. Aynı anda mobilde
+ayrılarak stickman figürlerine dönüşür. Baş, gövde, kollar ve bacaklar ilgili
+eserin dokusuyla kaplıdır; farklı figürler farklı eserleri taşır. Eklemli
+bacaklar yürüyüş mesafesine göre adım atar, boşta duran figürler yerinde yürümez.
+Asalı kol atış öncesi kalkar; kırmızı ateş gerçekten asa ucundan çıkar.
+İlk dalgada 1, sonra artan sayıda figür saldırır. Aynı anda mobilde
 en fazla 6, masaüstünde 10 düşman bulunur; bütün mevcut eserler bitince kazanılır.
-İleri dalgalarda tablolar iki isabet ister. Tablolar kırmızı, oyuncu mavi ateş
+İleri dalgalarda figürler iki isabet ister. Figürler kırmızı, oyuncu mavi ateş
 topu atar. Atışlar sergi duvarlarını geçmez; tablolar duvar uçlarından dolanır.
 
 WASD/ok tuşlarıyla yürüme ve fareyle bakış korunur; tıklama, basılı tutma veya
 Boşluk mavi ateş atar. Mobilde sol çubuk, sürükleyerek nişan ve ayrı mavi ateş
-düğmesi birlikte çalışır. Altta retro can, dalga ve yok edilen tablo göstergesi
-açılır. ESC veya **Sergiye dön** oyunu kapatır. Sekme/odak kaybında oyun durur.
-Can sıfırlanınca ya da bütün tablolar yenilince eserlerin konumu, dönüşü,
+düğmesi birlikte çalışır. Oyuncu **3 canla** başlar; altta yüzde veya uzun can
+çubuğu yerine üç kalp gösterilir. Kırmızı ateş veya yakın temas bir can götürür;
+isabetten sonra 1,25 saniye korunma vardır. Üçüncü korunmasız isabette oyun biter.
+Dalga ve yok edilen tablo sayısı da görünür. ESC veya **Sergiye dön** oyunu
+kapatır. Sekme/odak kaybında oyun durur. Canlar bitince ya da bütün figürler
+yenilince eserlerin konumu, dönüşü,
 ölçeği, görünürlüğü ve gölge ayarları geri yüklenir. Sonra normal sergiye dönülür.
 Tekrar açmak yeniden 17 logo tıklaması ister; başka sergiye taşınan sayaç yoktur.
 
 Oyun yalnızca geçici sahne nesnelerini hareket ettirir; görsellere, Drive'a,
 sergi metadata'sına veya yönetim API'sine yazmaz. Efektler ancak gizli oyun
 açıldığında oluşturulur; atış ve patlama sayısı sınırlıdır. Hareket azaltma
-tercihinde düşman salınımı, ateş titreşimi ve hasar parlaması kapalıdır.
+tercihinde uzuv salınımı, doğuş büyümesi, ateş titreşimi ve hasar parlaması kapalıdır.
+Her stickman altı ortak çizim grubu kullanır; yeni doku indirilmez. Ödünç alınan
+eser dokuları figür yok edilirken silinmez; yalnızca oyunun kendi kaynakları bırakılır.
 Oyun için harici marka karakteri, ses kaydı veya yeni model indirilmez.
 
 Galerideki arama başlık, açıklama, sanatçı ve Drive dosya adını tarar; Türkçe

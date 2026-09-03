@@ -1088,12 +1088,9 @@ body {
 .gal3d-game-hud span { display: block; font-size: 0.65rem; color: #a6b3bc; letter-spacing: 0.1em; }
 .gal3d-game-hud strong { display: block; font-size: 1.35rem; color: #f7dc96; }
 .gal3d-game-vitals { flex: 1; max-width: 130px; }
-.gal3d-game-vitals progress { display: block; appearance: none; width: 100%; height: 8px; border: 1px solid #0c151c; background: #0c151c; margin-top: 4px; }
-.gal3d-game-vitals progress::-webkit-progress-bar { background: #0c151c; }
-.gal3d-game-vitals progress::-webkit-progress-value { background: #54bfa1; }
-.gal3d-game-vitals progress::-moz-progress-bar { background: #54bfa1; }
-.gal3d-game-hud.critical progress::-webkit-progress-value { background: #eb5938; }
-.gal3d-game-hud.critical progress::-moz-progress-bar { background: #eb5938; }
+.gal3d-game-vitals #gal3d-game-lives { color: #ff826b; letter-spacing: 0.12em; font-size: 1.6rem; white-space: nowrap; }
+.gal3d-game-vitals small { font: inherit; color: #e5e8df; margin-left: 0.3rem; }
+.gal3d-game-hud.critical #gal3d-game-lives { color: #ffd079; }
 .gal3d-game-sigil { color: #65d7ff; font-size: 2.4rem; text-shadow: 0 0 16px #078aff; }
 .gal3d-game-hud button { min-height: 44px; padding: 0.4rem 0.6rem; color: #e0eaf1; border: 1px solid #647888; background: #263846; font: 0.72rem monospace; cursor: pointer; }
 .gal3d-game-fire { position: absolute; z-index: 8; bottom: calc(7.5rem + env(safe-area-inset-bottom)); right: max(1rem,env(safe-area-inset-right)); width: 86px; height: 86px; border-radius: 50%; border: 2px solid #78daff; background: radial-gradient(#1266a8cc,#073453dd); color: #e3faff; box-shadow: 0 0 18px #1598ed70; touch-action: none; user-select: none; font: 700 0.7rem monospace; }
@@ -1105,6 +1102,7 @@ body {
 @media (max-width: 600px) {
   .gal3d-game-hud { gap: 0.55rem; padding: 0.6rem; }
   .gal3d-game-hud strong { font-size: 1.05rem; }
+  .gal3d-game-vitals #gal3d-game-lives { font-size: 1.3rem; }
   .gal3d-game-hud span { font-size: 0.58rem; }
   .gal3d-game-sigil { font-size: 1.65rem; }
   .gal3d-game-hud button { max-width: 75px; font-size: 0.65rem; }

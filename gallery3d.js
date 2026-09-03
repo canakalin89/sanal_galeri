@@ -220,6 +220,7 @@
       const canvas = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.8), new THREE.MeshBasicMaterial({ color: 0xd9deda, toneMapped: false }));
       canvas.position.z = 0.04;
       frame.add(border, mount, canvas);
+      frame.userData.artworkSurface = canvas;
       const plaque = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 0.24), new THREE.MeshBasicMaterial({
         map: labelTexture(String(slot.index + 1).padStart(2, '0') + '  ' + (img.title || 'Eser ' + (slot.index + 1)), img.artist || 'Bilgi için eseri seçin'), toneMapped: false
       }));
