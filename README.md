@@ -148,9 +148,10 @@ birlikte güncelleyin.
 - index.html / style.css / script.js: ziyaretçi galerisi ve büyük görsel penceresi
 - gallery-data.js: ziyaretçi yanıt doğrulaması, ortak istekler ve kısa önbellek
 - artwork-tools.js: Türkçe arama, sanatçı filtresi ve kalıcı eser bağlantıları
-- gallery3d.js: 3D oturumu, kontroller, eser dokuları ve salon geçişleri
+- gallery3d.js: 3D oturumu, mobil/masaüstü kontroller, eser ve dekor yüklemeleri
 - gallery-layout.js / gallery-room.js: deterministik salon planı ve prosedürel mimari
-- vendor/three.module.js: yerel Three.js; eski model/çözücü dosyaları yayına alınmaz
+- vendor/: yerel Three.js, GLTF/Draco yükleyicileri ve seçilmiş dekor modelleri
+- THIRD_PARTY_ASSETS.md: kullanılan 3D modellerin kaynak ve lisans bilgileri
 - admin.html / admin-app.js / admin-state.js: yönetim arayüzü ve veri koruma
 - api/auth.js: giriş, oturum sorgusu, çıkış
 - api/admin.js: sınırlı GitHub dosya okuma/kaydetme
@@ -168,23 +169,30 @@ klavye/dokunmatik büyük görsel gezinmesi ve WQXR radyo bileşeni bulunur.
 3D mod yalnızca butonla yüklenir; WASD/fare veya mobil joystick ile gezinilir.
 Fare kilidi desteklenmediğinde sürükleyerek bakılabilir. Mobilde yürüyüş ve
 bakış farklı parmaklarla birlikte kullanılabilir; çubuk hareketi yürüyüş hızını ayarlar.
-Salon yüklenirken de kapatılabilir. Kapanışta veya salon değişiminde önceki
-eser yüklemeleri iptal edilir ve sahne kaynakları temizlenir.
-Geç tamamlanan görseller yeni salona uygulanmaz.
+Joystick olayları bakış alanından ayrıdır; yürürken kamera istemeden dönmez.
+Telefon adres çubuğu ve yön değişiminde tuval yeniden ölçülür. Çentik güvenli
+alanları korunur, mobil seçim/düğmeler en az 44 piksel dokunma yüksekliğindedir.
+Mobil tarayıcı WebGL bağlamını geçici olarak kaybederse görünüm duraklatılır ve
+bağlam geri geldiğinde aynı salon otomatik olarak devam eder.
+Salon yüklenirken de kapatılabilir. Kapanışta eser/model yüklemeleri iptal
+edilir ve sahne kaynakları temizlenir. Geç tamamlanan görseller kapatılmış
+salona uygulanmaz.
 
 3D mimari tamamen prosedüreldir: açık taş zemin, kırık beyaz duvarlar,
 ince koyu çerçeve/paspartu, açık meşe bant ve düzenli tavan ışık panelleri.
-Merkezde dolaşımı veya eserleri örten dekor/pano yoktur. Sergi kimliği giriş
-duvarında ve üst araç çubuğunda gösterilir; sağlanan okul logosu aynen korunur.
-Hazır GLB modelleri, Draco çözücü ve rastgele bitki/dekor kullanılmaz.
+Koleksiyonun tamamı tek salonda kalır. Eser sayısı arttıkça salon içinde
+çift yüzlü sergi duvarları ve en az 4,4 metrelik koridorlar oluşur; 28 eser
+tek orta duvarlı, iki geniş koridorlu bir salona yerleşir. Eserler merkezleri
+1,8 m yükseklikte ve aynı yüzeyde en az 2,85 m aralıklı sergilenir.
+Sergi kimliği giriş duvarında ve üst araç çubuğunda gösterilir; sağlanan okul
+logosu aynen korunur. Yürüyüş akslarındaki halılar ve özgün banklar ile gerçek
+saksılı bitki ve avize modelleri salonu doldurur. Dekorların çarpışma alanları vardır;
+ziyaretçi duvarların veya mobilyaların içinden geçmez. Modeller yüklenemezse
+prosedürel karşılıkları görünür kalır.
 
-Her salon en fazla 12 eserdir. Koleksiyon dengeli salonlara ayrılır
-(28 eser = 10 + 9 + 9); önceki/sonraki düğmeleri veya Salon seç ile geçilir.
-Oda boyutu yaklaşık 8–13,2 m genişlik ve 8–14,4 m derinlik arasında kalır;
-eserler üç duvarda, merkezleri 1,8 m yükseklikte, en az 2,85 m aralıklıdır.
 Yatay/dikey/kare eserler en fazla 2,1 × 2 m alana kırpılmadan sığar.
-Bir kerede yalnızca mevcut salonun eserleri, en fazla dört eşzamanlı görsel
-isteğiyle yüklenir. Görsel yüklemesi 15 saniyede kesilir; başarısız görsel
+Eserler en fazla dört eşzamanlı görsel isteğiyle yüklenir. Görsel yüklemesi
+15 saniyede kesilir; başarısız görsel
 için seçilebilir hata yüzeyi kalır. Sahnedeki üç ışık eser sayısından bağımsızdır;
 eser dokuları ton eşleme ve renkli ışık etkisinden bağımsız gösterilir.
 3D salonda görünür esere tıklamak/dokunmak büyük görsel, başlık, açıklama,
