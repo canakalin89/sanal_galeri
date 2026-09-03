@@ -1035,6 +1035,9 @@ body {
 }
 
 /* Prosedürel salonun ortak, ekran boyutuna uyarlanan üst araç çubuğu. */
+.gal3d-school-seal { display: grid; place-items: center; padding: 0; border: 0; background: transparent; cursor: pointer; min-width: 44px; min-height: 44px; touch-action: manipulation; }
+.gal3d-school-seal img { pointer-events: none; }
+.gal3d-school-seal:focus-visible { outline: 2px solid #a8eaff; outline-offset: 2px; }
 .gal3d-topbar { position: absolute; inset: 1rem 1rem auto; z-index: 6; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 0.8rem; pointer-events: none; }
 .gal3d-topbar > * { pointer-events: auto; }
 .gal3d-topbar .gal3d-badge { position: static; justify-self: start; max-width: 100%; padding: 0.7rem; background: rgba(27,45,52,0.9); border-color: rgba(255,255,255,0.16); border-radius: 8px; }
@@ -1076,6 +1079,42 @@ body {
 @media (pointer: coarse) and (max-height: 600px) {
   .gal3d-hint { display: none; }
 }
+
+.gal3d-game-hit { position: absolute; inset: 0; z-index: 4; pointer-events: none; opacity: 0; box-shadow: inset 0 0 80px 24px #c22914; }
+.gal3d-game-screen { position: absolute; z-index: 7; inset: 22% 8% 28%; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; pointer-events: none; color: #e0faff; text-shadow: 0 2px 8px #00101d, 0 0 18px #0782cd; }
+.gal3d-game-screen strong { font: 900 clamp(2rem,8vw,5rem) monospace; letter-spacing: 0.03em; }
+.gal3d-game-screen p { max-width: 440px; margin-top: 1rem; padding: 0.6rem 1rem; background: #071824e8; border: 1px solid #4b7d99; border-radius: 4px; font-size: 0.85rem; }
+.gal3d-game-hud { position: absolute; z-index: 8; bottom: max(0.7rem,env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: min(540px,calc(100% - 1.4rem)); display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.8rem 1rem; background: linear-gradient(#28333c,#101922); border: 3px solid #63717c; box-shadow: inset 0 0 0 2px #070d14, 0 5px 24px #0008; color: #e5e8df; font-family: monospace; }
+.gal3d-game-hud span { display: block; font-size: 0.65rem; color: #a6b3bc; letter-spacing: 0.1em; }
+.gal3d-game-hud strong { display: block; font-size: 1.35rem; color: #f7dc96; }
+.gal3d-game-vitals { flex: 1; max-width: 130px; }
+.gal3d-game-vitals progress { display: block; appearance: none; width: 100%; height: 8px; border: 1px solid #0c151c; background: #0c151c; margin-top: 4px; }
+.gal3d-game-vitals progress::-webkit-progress-bar { background: #0c151c; }
+.gal3d-game-vitals progress::-webkit-progress-value { background: #54bfa1; }
+.gal3d-game-vitals progress::-moz-progress-bar { background: #54bfa1; }
+.gal3d-game-hud.critical progress::-webkit-progress-value { background: #eb5938; }
+.gal3d-game-hud.critical progress::-moz-progress-bar { background: #eb5938; }
+.gal3d-game-sigil { color: #65d7ff; font-size: 2.4rem; text-shadow: 0 0 16px #078aff; }
+.gal3d-game-hud button { min-height: 44px; padding: 0.4rem 0.6rem; color: #e0eaf1; border: 1px solid #647888; background: #263846; font: 0.72rem monospace; cursor: pointer; }
+.gal3d-game-fire { position: absolute; z-index: 8; bottom: calc(7.5rem + env(safe-area-inset-bottom)); right: max(1rem,env(safe-area-inset-right)); width: 86px; height: 86px; border-radius: 50%; border: 2px solid #78daff; background: radial-gradient(#1266a8cc,#073453dd); color: #e3faff; box-shadow: 0 0 18px #1598ed70; touch-action: none; user-select: none; font: 700 0.7rem monospace; }
+.gal3d-game-fire span { display: block; font-size: 1.6rem; }
+.gal3d-game-fire:active { background: #167ec9; }
+.game-active .gal3d-artwork-picker, .game-active .gal3d-minimap-wrap, .game-active .gal3d-hint, .game-active .gal3d-weather { display: none !important; }
+.game-active .gal3d-aim { z-index: 5; color: #a5e5ff; font-size: 1.7rem; }
+.game-active .gal3d-joystick { bottom: calc(7.5rem + env(safe-area-inset-bottom)); }
+@media (max-width: 600px) {
+  .gal3d-game-hud { gap: 0.55rem; padding: 0.6rem; }
+  .gal3d-game-hud strong { font-size: 1.05rem; }
+  .gal3d-game-hud span { font-size: 0.58rem; }
+  .gal3d-game-sigil { font-size: 1.65rem; }
+  .gal3d-game-hud button { max-width: 75px; font-size: 0.65rem; }
+}
+@media (max-height: 500px) {
+  .gal3d-game-hud { width: min(450px,calc(100% - 230px)); padding: 0.4rem 0.6rem; gap: 0.6rem; }
+  .game-active .gal3d-joystick, .gal3d-game-fire { bottom: max(0.8rem,env(safe-area-inset-bottom)); }
+  .gal3d-game-screen { inset: 14% 12% 23%; }
+}
+@media (prefers-reduced-motion: reduce) { .gal3d-game-hit { display: none; } }
 
 .embed-mode header,
 .embed-mode .about-section,

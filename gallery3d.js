@@ -345,6 +345,7 @@
       cancelAnimationFrame(raf);
       raf = null;
       resetControls();
+      run.game?.setPaused(true);
       const loading = el('gal3d-loading');
       loading.querySelector('p').textContent = '3D görünüm yeniden hazırlanıyor…';
       loading.classList.remove('hidden');
@@ -356,6 +357,7 @@
       loading.classList.add('hidden');
       renderer.shadowMap.needsUpdate = true;
       clock.start();
+      run.game?.setPaused(document.hidden);
       animate();
     });
   }
@@ -395,11 +397,16 @@
     const ceilingPositions = selectEvenly(plan.decor.chandeliers, run.quality.ceilingLightCount);
     ceilingPositions.forEach((placement, index) => {
       const ceilingLight = new THREE.SpotLight(0xffe8c4, state.isMobile ? 22 : 30, 7.5, 0.78, 0.82, 2);
-      const z = ceilingPositions.length === 1 ? 0 : (index % 2 ? -plan.depth * 0.22 : plan.depth * 0.22);
-      ceilingLight.position.set(placement.x, plan.height - 0.16, z);
+      const rafters = GalleryRoof.layout(plan).rafters;
+      const desiredZ = ceilingPositions.length === 1 ? 0 : (index % 2 ? -plan.depth * 0.22 : plan.depth * 0.22);
+      const z = rafters.reduce((best, value) => Math.abs(value - desiredZ) < Math.abs(best - desiredZ) ? value : best, 0);
+      ceilingLight.position.set(placement.x, plan.height - 0.1, z);
       ceilingLight.target.position.set(placement.x, 0, z);
       lights.add(ceilingLight, ceilingLight.target);
       ceilingLights.push(ceilingLight);
+      // Spot gövdesi camın önünde boşlukta kalmaz; alt kirişe sabitlenir.
+      const housing = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.08, 0.12, 10), new THREE.MeshStandardMaterial({ color: 0x354345, roughness: 0.55 }));
+      housing.position.copy(ceilingLight.position); lights.add(housing);
     });
 
     const lamps = [];
@@ -425,7 +432,7 @@
     const conditions = run.weather ? GalleryWeather.describe(run.weather) : null;
     const cycle = GalleryLighting.dayCycle(new Date(), run.weather?.sun || []);
     const { hemisphere, sun, fill, ceilingLights, lamps } = run.dayNightLights;
-    hemisphere.intensity = cycle.hemisphereIntensity;
+    hemisphere.intensity = cycle.hemisphereIntensity * (1 - (conditions?.cloud || 0) * 0.2);
     hemisphere.color.set(0xbfdcff).lerp(new THREE.Color(0xf8fbff), cycle.daylight);
     hemisphere.groundColor.set(0x242a31).lerp(new THREE.Color(0x77736b), cycle.daylight);
     sun.intensity = cycle.sunIntensity * (1 - (conditions?.cloud || 0) * 0.86);
@@ -447,6 +454,8 @@
     const dayNight = run.room?.userData.dayNight;
     if (dayNight) {
       dayNight.glassMaterial.opacity = 0.14 - cycle.daylight * 0.06;
+      dayNight.roofGlassMaterial.opacity = 0.2 - cycle.daylight * 0.08;
+      dayNight.roofGlassMaterial.roughness = conditions?.rain ? 0.22 : 0.1;
     }
     if (run.neighborhood) GalleryNeighborhood.update(THREE, run.neighborhood, cycle, sun.position, conditions);
     const exhibitionBadge = el('gal3d-exhibition-name');
@@ -498,6 +507,25 @@
     configureLighting(plan, run);
     enhanceRoomWithModels(room, plan, run);
     placeArtworks(room, plan, run);
+    loadImageTexture('/assets/logo.png', run.roomController.signal).then(texture => {
+      if (!texture) return;
+      if (!isCurrent(run) || run.room !== room) { texture.dispose(); return; }
+      const material = room.userData.entranceLogo.material;
+      material.map = texture; material.opacity = 1; material.needsUpdate = true;
+    });
+    run.game = GalleryGame.create(THREE, {
+      scene, camera, plan, frames: state.frames, mobile: state.isMobile,
+      onShadowChange: () => { if (renderer) renderer.shadowMap.needsUpdate = true; },
+      onModeChange: mode => {
+        resetControls();
+        el('gal3d-aim').classList.toggle('hidden', mode === 'idle' && state.isMobile);
+        if (mode === 'ended' || mode === 'idle') {
+          if (document.pointerLockElement === el('gal3d-canvas-container')) document.exitPointerLock();
+        }
+        if (mode === 'countdown') el('gal3d-overlay').focus();
+        if (mode === 'ended') el('gal3d-game-exit').focus();
+      }
+    });
     enhanceNeighborhood(plan, run);
     refreshWeather(run);
     run.weatherTimer = setInterval(() => { if (!document.hidden) refreshWeather(run); }, GalleryWeather.REFRESH_MS);
@@ -518,7 +546,7 @@
   /* ─── KONTROLLER ─────────────────────────────────────────── */
 
   function inspectArtwork(index) {
-    if (!state.active || state.inspecting || !state.images[index]) return;
+    if (!state.active || state.inspecting || !state.images[index] || session.game?.mode() !== 'idle') return;
     const run = session;
     state.inspecting = true;
     resetControls();
@@ -536,12 +564,23 @@
       : new THREE.Vector2((event.clientX - bounds.left) / bounds.width * 2 - 1, -(event.clientY - bounds.top) / bounds.height * 2 + 1);
     const ray = new THREE.Raycaster();
     ray.setFromCamera(pointer, camera);
+    if (session.game?.mode() !== 'idle') { session.game?.fire(ray.ray.direction); return true; }
     // İlk yüzey seçilir; duvarın/panonun arkasındaki eser tıklanamaz.
     scene.updateMatrixWorld(true);
-    const index = ArtworkTools.pickedArtworkIndex(ray.intersectObjects(scene.children, true), state.images);
+    const hits = ray.intersectObjects(scene.children, true);
+    if (hits[0]?.object.userData.secretLogo) { tapSecretLogo(); return true; }
+    const index = ArtworkTools.pickedArtworkIndex(hits, state.images);
     if (index < 0) return false;
     inspectArtwork(index);
     return true;
+  }
+
+  function tapSecretLogo() {
+    if (state.inspecting || !session?.game) return;
+    const started = session.game.tapLogo();
+    if (started && !state.isMobile) {
+      try { el('gal3d-canvas-container').requestPointerLock?.()?.catch(() => {}); } catch {}
+    }
   }
 
   function setupArtworkPicker(plan) {
@@ -576,9 +615,14 @@
     const movementKeys = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
     listen(window, 'keydown', e => {
       if (state.inspecting || e.target.matches('input, select, textarea')) return;
+      if (e.code === 'Space' && run.game?.mode() === 'playing' && !e.target.matches('button')) {
+        e.preventDefault(); run.game.fire(); run.game.setFiring(true); return;
+      }
       if (movementKeys.has(e.code)) { e.preventDefault(); state.keys[e.code] = true; }
     });
-    listen(window, 'keyup', e => { state.keys[e.code] = false; });
+    listen(window, 'keyup', e => { state.keys[e.code] = false; if (e.code === 'Space') run.game?.setFiring(false); });
+    listen(container, 'pointerdown', e => { if (e.button === 0 && run.game?.mode() === 'playing') run.game.setFiring(true); });
+    for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) listen(container, event, () => run.game?.setFiring(false));
     listen(document, 'pointerlockchange', () => {
       if (document.pointerLockElement !== container) resetControls();
     });
@@ -667,7 +711,7 @@
   /* ─── HAREKET ────────────────────────────────────────────── */
 
   function updateMovement(dt) {
-    if (state.inspecting) return;
+    if (state.inspecting || ['countdown', 'ended'].includes(session?.game?.mode()) || document.hidden) return;
     const speed = 3.2;
     let moveX = 0, moveZ = 0;
 
@@ -767,6 +811,7 @@
     raf = requestAnimationFrame(animate);
     const dt = Math.min(0.05, clock.getDelta());
     updateMovement(dt);
+    session.game?.tick(dt);
     session.atmosphere?.tick(dt);
     renderer.render(scene, camera);
 
@@ -800,10 +845,12 @@
     el('gal3d-aim').classList.add('hidden');
     run.releaseModal = window.activateGalleryModal(overlay);
     listen(window, 'keydown', escListener);
-    listen(window, 'blur', resetControls);
+    listen(window, 'blur', () => { resetControls(); run.game?.setPaused(true); });
+    listen(window, 'focus', () => run.game?.setPaused(document.hidden));
     listen(document, 'visibilitychange', () => {
       if (document.hidden) resetControls();
       run.atmosphere?.setVisible(!document.hidden);
+      run.game?.setPaused(document.hidden);
       if (!document.hidden && run.atmosphere && Date.now() - (run.weatherUpdatedAt || 0) > GalleryWeather.REFRESH_MS) refreshWeather(run);
     });
 
@@ -834,6 +881,13 @@
 
       setupScene(container);
       showRoom();
+      listen(el('gal3d-school-seal'), 'click', tapSecretLogo);
+      listen(el('gal3d-game-exit'), 'click', () => run.game.exit());
+      const fireButton = el('gal3d-game-fire');
+      listen(fireButton, 'pointerdown', event => {
+        event.preventDefault(); fireButton.setPointerCapture(event.pointerId); run.game.fire(); run.game.setFiring(true);
+      });
+      for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) listen(fireButton, type, () => run.game.setFiring(false));
       const sound = el('gal3d-weather-sound');
       sound.setAttribute('aria-pressed', 'false'); sound.textContent = 'Ses kapalı';
       listen(sound, 'click', async () => {
@@ -869,7 +923,9 @@
   }
 
   function escListener(e) {
-    if (e.code === 'Escape' && !state.inspecting) closeGallery3D();
+    if (e.code !== 'Escape' || state.inspecting) return;
+    if (session?.game?.mode() !== 'idle') { session.game.exit(); return; }
+    closeGallery3D();
   }
 
   function closeGallery3D() {
@@ -884,6 +940,7 @@
     run.weatherController?.abort();
     run.neighborhoodController?.abort();
     run.atmosphere?.dispose();
+    run.game?.dispose();
     run.resizeObserver?.disconnect();
     resetControls();
     cancelAnimationFrame(raf);

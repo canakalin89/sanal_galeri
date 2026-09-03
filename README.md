@@ -150,6 +150,8 @@ birlikte güncelleyin.
 - artwork-tools.js: Türkçe arama, sanatçı filtresi ve kalıcı eser bağlantıları
 - gallery3d.js: 3D oturumu, mobil/masaüstü kontroller, eser ve dekor yüklemeleri
 - gallery-layout.js / gallery-lighting.js / gallery-room.js: deterministik salon planı, cihaz kalite profili ve prosedürel mimari
+- gallery-roof.js: cam fener tavanı, taşıyıcılar ve çatı üzerindeki yağış sınırı
+- gallery-game.js: oturuma özel gizli tablo oyunu; veri veya dosya yazmaz
 - gallery-neighborhood.js / assets/environment/kapakli.json: okul konumuna göre açık harita geometrileri ve dış çevre
 - gallery-weather.js / gallery-atmosphere.js: hava verisi doğrulaması, dış yağış ve isteğe bağlı ses
 - api/weather.js / server/weather.js: yalnızca okul için önbellekli Open-Meteo verisi
@@ -183,7 +185,15 @@ salona uygulanmaz.
 
 3D mimari tamamen prosedüreldir: kabartılı açık taş zemin, ince mineral doku
 shader'ı kullanan kırık beyaz duvarlar, koyu çerçeve/paspartu, açık meşe bant
-ve düzenli tavan ışık panelleri. Eser bulunmayan giriş cephesindeki iki
+ve eğimli cam fener tavanı. Opak çevre bandı, ince metal taşıyıcılar, ahşap
+alt kirişler ve gizli ışık çizgileri tavanı tamamlar; koridorların üzerindeki
+cam bölümler salonla birlikte çoğalır. Tek bir kapalı hacim korunur, yeni oda
+veya yürüme engeli eklenmez. Camlar mevcut dış gökyüzüne bakar; güneş camdan
+geçerken opak taşıyıcılar zemine ve duvarlara gölge düşürür. Büyük kapalı ışık
+panelleri kaldırılmıştır; spotlar kirişlere, mevcut avizeler alt taşıyıcılara
+bağlıdır. Çatı geometrileri altı ortak çizim grubunda tutulur; mobil için
+ek yansıma geçişi, kırılma işlemi veya ışık/gölge haritası eklenmez.
+Eser bulunmayan giriş cephesindeki iki
 çerçeveli pencere salonun dış gökyüzünü ve doğal ışığı gösterir.
 Koleksiyonun tamamı tek salonda kalır. Eser sayısı arttıkça salon içinde
 çift yüzlü sergi duvarları ve en az 4,4 metrelik koridorlar oluşur; 28 eser
@@ -233,7 +243,10 @@ Sekiz saniyelik zaman aşımı, başarısız yanıt veya bir saatten eski veride
 yağış/fırtına efektleri kapatılır ve güncel veri alınamadığı belirtilir.
 
 Bulut, görüş mesafesi ve güneş şiddeti veriye uyar; yağmur/kar yalnızca
-camların dışında düşer, yağmurda dış zemin daha parlak görünür. Yalnızca WMO
+cephe camlarının dışında ve cam çatının üzerinde düşer. Çatı eğiminin altına
+inen parçacık yeniden dışarıda başlatılır; salonun içine yağış girmez.
+Çatı ve ön cephe mobilde toplam 400, masaüstünde 900 parçacık bütçesini paylaşır.
+Yağmurda dış zemin daha parlak, çatı camı daha pürüzlü görünür. Yalnızca WMO
 95/96/99 kodlarında seyrek ve tek geçişli şimşek ile gök gürültüsü oluşur;
 bu efektler gerçek bir yıldırımın anlık yerini/zamanını göstermez. Yağmur ve
 gök gürültüsü sesi başlangıçta kapalıdır, düğmeyle açılır. Ses kapatıldığında,
@@ -248,6 +261,30 @@ sanatçı ve paylaşım bağlantısını açar. Fare kilitliyken ekran merkezind
 işaret kullanılır. Bu salondaki eser listesinden İncele düğmesiyle de aynı pencere açılır.
 Kart açıkken yürüyüş/bakış durur; ESC kartı kapatıp aynı salon konumuna döner.
 Kamera esere otomatik yaklaşmaz.
+
+### Gizli oyun
+
+3D sergi tanıtımındaki okul logosuna **17 kez** tıklayın/dokunun. Üst başlıktaki
+erişilebilir logo düğmesi (klavyeyle de kullanılabilir) ve giriş panosundaki
+aynı orijinal logo bu sayacı paylaşır. 3–2–1 sayımı sonrası tablolar yerlerinden
+ayrılır; ilk dalgada 1, sonra artan sayıda tablo saldırır. Aynı anda mobilde
+en fazla 6, masaüstünde 10 düşman bulunur; bütün mevcut eserler bitince kazanılır.
+İleri dalgalarda tablolar iki isabet ister. Tablolar kırmızı, oyuncu mavi ateş
+topu atar. Atışlar sergi duvarlarını geçmez; tablolar duvar uçlarından dolanır.
+
+WASD/ok tuşlarıyla yürüme ve fareyle bakış korunur; tıklama, basılı tutma veya
+Boşluk mavi ateş atar. Mobilde sol çubuk, sürükleyerek nişan ve ayrı mavi ateş
+düğmesi birlikte çalışır. Altta retro can, dalga ve yok edilen tablo göstergesi
+açılır. ESC veya **Sergiye dön** oyunu kapatır. Sekme/odak kaybında oyun durur.
+Can sıfırlanınca ya da bütün tablolar yenilince eserlerin konumu, dönüşü,
+ölçeği, görünürlüğü ve gölge ayarları geri yüklenir. Sonra normal sergiye dönülür.
+Tekrar açmak yeniden 17 logo tıklaması ister; başka sergiye taşınan sayaç yoktur.
+
+Oyun yalnızca geçici sahne nesnelerini hareket ettirir; görsellere, Drive'a,
+sergi metadata'sına veya yönetim API'sine yazmaz. Efektler ancak gizli oyun
+açıldığında oluşturulur; atış ve patlama sayısı sınırlıdır. Hareket azaltma
+tercihinde düşman salınımı, ateş titreşimi ve hasar parlaması kapalıdır.
+Oyun için harici marka karakteri, ses kaydı veya yeni model indirilmez.
 
 Galerideki arama başlık, açıklama, sanatçı ve Drive dosya adını tarar; Türkçe
 ve aksansız yazımlar desteklenir. Sanatçı filtresi aramayla birlikte çalışır.
