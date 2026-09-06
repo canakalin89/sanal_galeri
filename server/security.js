@@ -1,6 +1,7 @@
 const crypto = require('node:crypto');
 const SESSION_SECONDS = 3600;
 const MAX_BODY_BYTES = 512 * 1024;
+const PRODUCTION_ORIGIN = 'https://asalgaleri.vercel.app';
 class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
@@ -47,8 +48,11 @@ function requireSession(req) {
   return session;
 }
 function requireOrigin(req) {
-  const allowed = new Set();
-  if (process.env.APP_ORIGIN) allowed.add(new URL(process.env.APP_ORIGIN).origin);
+  // Kalıcı canlı alan adı her dağıtımda aynıdır; VERCEL_URL ise geçici dağıtım alan adıdır.
+  const allowed = new Set([PRODUCTION_ORIGIN]);
+  if (process.env.APP_ORIGIN) {
+    try { allowed.add(new URL(process.env.APP_ORIGIN).origin); } catch {}
+  }
   if (process.env.VERCEL_URL) allowed.add('https://' + process.env.VERCEL_URL);
   if (isLocal()) { allowed.add('http://localhost:4173'); allowed.add('http://127.0.0.1:4173'); }
   if (!allowed.has(req.headers.origin) || req.headers['sec-fetch-site'] === 'cross-site') throw new HttpError(403, 'İsteğin kaynağı doğrulanamadı.');
@@ -84,4 +88,4 @@ function endpoint(handler, methods) {
     }
   };
 }
-module.exports = { HttpError, SESSION_SECONDS, MAX_BODY_BYTES, isLocal, equal, setCookie, issueSession, getSession, requireSession, requireOrigin, requireCsrf, jsonBody, endpoint };
+module.exports = { HttpError, SESSION_SECONDS, MAX_BODY_BYTES, PRODUCTION_ORIGIN, isLocal, equal, setCookie, issueSession, getSession, requireSession, requireOrigin, requireCsrf, jsonBody, endpoint };

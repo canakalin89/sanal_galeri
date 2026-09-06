@@ -458,7 +458,7 @@
       dayNight.roofGlassMaterial.opacity = 0.2 - cycle.daylight * 0.08;
       dayNight.roofGlassMaterial.roughness = conditions?.rain ? 0.22 : 0.1;
     }
-    if (run.neighborhood) GalleryNeighborhood.update(THREE, run.neighborhood, cycle, sun.position, conditions);
+    if (run.neighborhood) GalleryNeighborhood.update(THREE, run.neighborhood, cycle, sun.position, conditions, run.weather);
     const exhibitionBadge = el('gal3d-exhibition-name');
     if (exhibitionBadge) {
       exhibitionBadge.textContent = `${run.exhibitionName} · ${cycle.label} ${cycle.time}`;
@@ -501,7 +501,7 @@
     const room = GalleryRoom.create(THREE, plan, run.exhibitionName, run.schoolName);
     run.room = room;
     scene.add(room);
-    run.neighborhood = GalleryNeighborhood.create(THREE, plan);
+    run.neighborhood = GalleryNeighborhood.create(THREE, plan, state.isMobile, window.matchMedia('(prefers-reduced-motion: reduce)').matches);
     scene.add(run.neighborhood);
     run.atmosphere = GalleryAtmosphere.create(THREE, scene, plan, state.isMobile);
     tuneRoomMaterials(room);
@@ -814,6 +814,7 @@
     updateMovement(dt);
     session.game?.tick(dt);
     session.atmosphere?.tick(dt);
+    if (!document.hidden) session.neighborhood?.userData.sky.tick(dt, camera.position);
     renderer.render(scene, camera);
 
     minimapFrameCount++;

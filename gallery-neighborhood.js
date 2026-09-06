@@ -97,39 +97,15 @@
     return texture;
   }
 
-  function create(THREE, plan) {
+  function create(THREE, plan, mobile = false, reducedMotion = false) {
     const group = new THREE.Group(); group.name = 'Karaağaç çevresi';
-    const skyMaterial = new THREE.ShaderMaterial({
-      side: THREE.BackSide, depthWrite: false, toneMapped: false,
-      uniforms: { daylight: { value: 1 }, dusk: { value: 0 }, cloudCover: { value: 0.25 }, storm: { value: 0 }, sunDirection: { value: new THREE.Vector3(0.2, 0.7, 0.7) } },
-      vertexShader: 'varying vec3 vDirection; void main() { vDirection = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: `
-        varying vec3 vDirection; uniform float daylight; uniform float dusk; uniform float cloudCover; uniform float storm; uniform vec3 sunDirection;
-        float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-        float noise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f); return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y); }
-        void main() {
-          vec3 d = normalize(vDirection); float h = max(0.0, d.y);
-          vec3 day = mix(vec3(0.76,0.81,0.80), vec3(0.30,0.53,0.73), pow(h,0.55));
-          vec3 night = mix(vec3(0.065,0.09,0.13), vec3(0.008,0.018,0.04), pow(h,0.4));
-          vec3 color = mix(night, day, daylight);
-          color += dusk * vec3(0.28,0.09,0.025) * pow(1.0-h,5.0);
-          vec2 uv = d.xz / max(0.16,d.y + 0.2);
-          float cloud = noise(uv*2.0)*0.55 + noise(uv*4.5)*0.3 + noise(uv*10.0)*0.15;
-          cloud = smoothstep(0.85-cloudCover*0.7,1.05-cloudCover*0.65,cloud) * smoothstep(0.01,0.25,h);
-          color = mix(color, mix(vec3(0.1,0.13,0.18),vec3(0.95,0.94,0.88),daylight),cloud*0.8);
-          color = mix(color,mix(vec3(0.035,0.045,0.065),vec3(0.43,0.47,0.49),daylight),cloudCover*0.6+storm*0.25);
-          float sun = max(0.0,dot(d,normalize(sunDirection)));
-          color += vec3(1.0,0.8,0.55) * (pow(sun,1500.0)*0.7 + pow(sun,30.0)*0.1) * daylight * (1.0-cloudCover);
-          gl_FragColor = vec4(color,1.0);
-        }`
-    });
-    const sky = new THREE.Mesh(new THREE.SphereGeometry(1250, 32, 16), skyMaterial);
-    sky.renderOrder = -10; group.add(sky);
+    const sky = GallerySky.create(THREE, { mobile, reducedMotion });
+    group.add(sky.mesh);
     const groundMap = surfaceTexture(THREE); groundMap.repeat.set(300, 300);
     const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x92906d, map: groundMap, roughness: 1 });
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(2400, 2400), groundMaterial);
     ground.rotation.x = -Math.PI / 2; ground.position.y = GROUND_Y - 0.08; group.add(ground);
-    group.userData.skyMaterial = skyMaterial;
+    group.userData.sky = sky;
     group.userData.facades = [];
     group.userData.weatherSurfaces = [];
     return group;
@@ -264,12 +240,8 @@
     group.userData.counts = { buildings: selected.buildings.length, roads: selected.roads.length };
   }
 
-  function update(THREE, group, cycle, sunPosition, weather) {
-    const sky=group.userData.skyMaterial;
-    sky.uniforms.daylight.value=cycle.daylight; sky.uniforms.dusk.value=cycle.dusk;
-    sky.uniforms.sunDirection.value.copy(sunPosition).normalize();
-    sky.uniforms.cloudCover.value=weather?.cloud ?? 0.25;
-    sky.uniforms.storm.value=weather?.thunder ? 1 : 0;
+  function update(THREE, group, cycle, sunPosition, weather, report) {
+    group.userData.sky.update(cycle,sunPosition,weather,report);
     for(const facade of group.userData.facades) facade.emissiveIntensity=(1-cycle.daylight)*0.8;
     for(const surface of group.userData.weatherSurfaces) surface.roughness=weather?.rain ? 0.42 : 0.96;
   }

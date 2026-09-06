@@ -94,6 +94,14 @@ test('Giriş isteği de yabancı kaynakta reddedilir', async () => {
   const req = request('POST', { password: process.env.ADMIN_PASSWORD }); req.headers.origin = 'https://other.example';
   assert.equal((await call(auth, req)).statusCode, 403);
 });
+test('Canli admin alani APP_ORIGIN eksik veya bozuk olsa da kabul edilir; yabanci alan reddedilir', () => {
+  process.env.NODE_ENV = 'production'; process.env.VERCEL = '1';
+  process.env.VERCEL_URL = 'sanal-galeri-preview.vercel.app'; process.env.APP_ORIGIN = 'bozuk-adres';
+  const base = { headers: { origin: security.PRODUCTION_ORIGIN } };
+  assert.doesNotThrow(() => security.requireOrigin(base));
+  assert.doesNotThrow(() => security.requireOrigin({ headers: { origin:'https://' + process.env.VERCEL_URL } }));
+  assert.throws(() => security.requireOrigin({ headers: { origin:'https://other.example' } }), error => error.status === 403);
+});
 test('İzin verilmeyen dosya yolları engellenir', async () => {
   for (const path of ['api/auth.js', '../config.json', '.env', ['config.json']]) {
     assert.equal((await call(admin, loggedIn('GET', undefined, { path }))).statusCode, 400);
