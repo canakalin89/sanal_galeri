@@ -82,6 +82,11 @@ Vercel Firewall'da bir SDK kuralı oluşturun:
 - Sınır: IP başına 15 dakikada 5 istek
 - Eylem: rate limit
 
+SDK denetimi, doğrulanmış sayfa kaynağının alan adını ve Vercel'in güvenilir
+istemci IP başlığını kullanır. Geçici `VERCEL_URL` üzerinden iç istek yapılmaz;
+özel canlı alan adındaki kural aynı alan üzerinden değerlendirilir. IP başlığı
+eksikse veya SDK erişilemiyorsa giriş güvenli biçimde 503 ile kapalı kalır.
+
 Kuralın ilgili üretim/önizleme adresinde etkin olduğunu doğrulayın.
 Önizleme koruması kullanılıyorsa SDK'nın resmi gerekliliklerini uygulayın;
 gerekli otomasyon sırrını yalnızca sunucu ortamında tutun.

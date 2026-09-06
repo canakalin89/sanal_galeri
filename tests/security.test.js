@@ -151,9 +151,9 @@ test('Yerel giriş denemeleri beş istekten sonra sınırlanır', async () => {
 test('Üretimde eksik Firewall kuralı girişe izin vermez', async () => {
   Object.assign(process.env, { NODE_ENV: 'production', VERCEL: '1', VERCEL_URL: 'fixture.vercel.app' });
   global.fetch = async url => { upstreamCalls.push(url); return json({}, 404); };
-  const req = request('POST'); req.headers.host = 'attacker.example'; req.headers['x-real-ip'] = '192.0.2.1';
+  const req = request('POST'); req.headers.host = 'attacker.example'; req.headers['x-vercel-forwarded-for'] = '192.0.2.1';
   await assert.rejects(checkLoginLimit(req), { status: 503 });
-  assert.match(upstreamCalls[0], /^https:\/\/fixture\.vercel\.app\//);
+  assert.match(upstreamCalls[0], /^https:\/\/gallery\.example\//);
 });
 test('Anonim Drive erişimi yalnızca yayımlanan klasörlere açıktır; indirme vekili kapalıdır', async () => {
   assert.equal((await call(drive, request('GET', undefined, { action: 'list', folderId: 'unlisted-folder' }))).statusCode, 404);
