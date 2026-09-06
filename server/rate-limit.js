@@ -20,10 +20,14 @@ async function checkLoginLimit(req) {
   let result;
   let timer;
   try {
-    // SDK Host başlığını kullanır; istemciden gelen Host yerine güvenilir dağıtım adresi.
-    const headers = { host: process.env.VERCEL_URL, 'x-real-ip': req.headers['x-real-ip'] || '', 'x-forwarded-for': req.headers['x-forwarded-for'] || '' };
+    // requireOrigin bu noktadan önce çalışır; SDK kuralı isteğin geldiği aynı proje alanında arar.
+    const firewallHost = new URL(req.headers.origin).host;
+    const forwarded = req.headers['x-vercel-forwarded-for'] || req.headers['x-real-ip'] || req.headers['x-forwarded-for'];
+    const clientIp = (Array.isArray(forwarded) ? forwarded[0] : String(forwarded || '').split(',')[0]).trim();
+    if (!clientIp || clientIp.length > 128) throw new Error('client-ip-missing');
+    const headers = { ...req.headers, host: firewallHost, 'x-real-ip': clientIp };
     result = await Promise.race([
-      checkRateLimit('gallery-admin-login', { headers }),
+      checkRateLimit('gallery-admin-login', { headers, rateLimitKey: clientIp }),
       new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('timeout')), 5000); })
     ]);
   } catch { throw new HttpError(503, 'Giriş korumasına ulaşılamadı. Daha sonra tekrar deneyin.'); }
