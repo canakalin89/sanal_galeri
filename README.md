@@ -58,7 +58,7 @@ Gerçek değerleri yalnızca Vercel'in ilgili ortamına veya git dışındaki
 |---|---|
 | ADMIN_PASSWORD | Güçlü yönetici şifresi |
 | SESSION_SECRET | En az 32 bayt rastgele, şifreden ayrı imzalama sırrı |
-| APP_ORIGIN | Yönetim arayüzünün kesin kaynağı, ör. https://asalgaleri.vercel.app |
+| APP_ORIGIN | Varsa canlı yönetim arayüzünün ek izinli kaynağı |
 | GITHUB_TOKEN | Yalnızca ilgili depoda Contents read/write yetkili token |
 | GITHUB_OWNER | Depo sahibi |
 | GITHUB_REPO | Depo adı |
@@ -68,7 +68,11 @@ Gerçek değerleri yalnızca Vercel'in ilgili ortamına veya git dışındaki
 Üretim Vercel işlevlerinde NODE_ENV=production ve sistem değişkenlerinin
 (VERCEL, VERCEL_URL) erişilebilir olması gerekir.
 Güvenilir VERCEL_URL, geçerli dağıtımın yönetim kaynağı olarak da kabul edilir.
-APP_ORIGIN'e bir joker alan adı veya kullanıcıdan gelen Host değeri yazmayın.
+Kalıcı `https://asalgaleri.vercel.app` yönetim kaynağı kodda sabit izinlidir;
+Vercel'in dağıtıma özel alan adı da platform değişkeninden eklenir. APP_ORIGIN
+başka bir yönetim alan adı kullanılacaksa gereklidir. APP_ORIGIN'e joker alan adı
+veya kullanıcıdan gelen Host değeri yazmayın. Bozuk bir ek değer kalıcı canlı
+alan adındaki girişi engellemez ve izin listesine alınmaz.
 
 ### Giriş hız sınırı — yayın öncesi zorunlu
 
@@ -153,6 +157,7 @@ birlikte güncelleyin.
 - gallery-roof.js: cam fener tavanı, taşıyıcılar ve çatı üzerindeki yağış sınırı
 - gallery-game.js: oturuma özel gizli tablo oyunu; veri veya dosya yazmaz
 - gallery-figure.js: tablo dokulu stickman, eklemli yürüyüş ve asa animasyonu
+- gallery-sky.js: güneşle aydınlanan, hava durumuna ve rüzgâra bağlı iki bulut katmanı
 - gallery-neighborhood.js / assets/environment/kapakli.json: okul konumuna göre açık harita geometrileri ve dış çevre
 - gallery-weather.js / gallery-atmosphere.js: hava verisi doğrulaması, dış yağış ve isteğe bağlı ses
 - api/weather.js / server/weather.js: yalnızca okul için önbellekli Open-Meteo verisi
@@ -243,7 +248,18 @@ istenmez, anahtar gerekmez. Hava 10 dakikada bir yenilenir; sunucu aynı süre
 Sekiz saniyelik zaman aşımı, başarısız yanıt veya bir saatten eski veride
 yağış/fırtına efektleri kapatılır ve güncel veri alınamadığı belirtilir.
 
-Bulut, görüş mesafesi ve güneş şiddeti veriye uyar; yağmur/kar yalnızca
+Bulut, görüş mesafesi ve güneş şiddeti veriye uyar. İki farklı yükseklikteki
+bulut katmanı rüzgâr yönünde yavaşça ilerler; yeni hava verisine geçiş yumuşaktır.
+Güneşe dönük kenarlar aydınlanır, yoğun kısımlar ve fırtına bulutları koyulaşır;
+gün batımında sıcak, gece koyu mavi tonlar kullanılır. Hareket, okulun 10 metre
+yüzey rüzgârından türetilmiş bir yaklaşımdır; üst seviye rüzgâr ölçümü veya
+uydudaki bulutların birebir görüntüsü değildir. Rüzgârsız havada hareket durur.
+Mobilde dört, masaüstünde beş ayrıntı katmanı tek gökyüzü çizimini paylaşır;
+128×128 doku yerelde üretilir, harici görsel/model veya ek hava isteği yoktur.
+Hareket azaltma tercihinde ve gizli sekmede bulut kayması durur. Güncel hava
+alınamazsa bulutlar yumuşakça kaldırılır; varsayılan bulutlar gerçek hava diye sunulmaz.
+
+Yağmur/kar yalnızca
 cephe camlarının dışında ve cam çatının üzerinde düşer. Çatı eğiminin altına
 inen parçacık yeniden dışarıda başlatılır; salonun içine yağış girmez.
 Çatı ve ön cephe mobilde toplam 400, masaüstünde 900 parçacık bütçesini paylaşır.
