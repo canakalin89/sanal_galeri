@@ -571,6 +571,11 @@ document.getElementById('gal3d-close').addEventListener('click', () => {
   window.closeGallery3D?.();
 });
 
+document.getElementById('gal3d-home').addEventListener('click', () => {
+  window.closeGallery3D?.();
+  location.hash = '';
+});
+
 /* ─── EMBED MODU ─────────────────────────────────────────── */
 
 const isEmbed = window.self !== window.top ||

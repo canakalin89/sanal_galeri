@@ -387,16 +387,19 @@ body {
   background: rgba(255,255,255,0.06);
   border: 1px solid rgba(127,227,255,0.35);
   color: var(--cyan-300);
-  width: 36px;
+  min-width: 36px;
   height: 36px;
-  border-radius: 50%;
-  font-size: 1.1rem;
+  padding: 0 0.85rem;
+  border-radius: 100px;
+  font-size: 0.82rem;
+  font-weight: 600;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: background 0.2s, border-color 0.2s;
   flex-shrink: 0;
+  gap: 0.4rem;
 }
 
 #btn-back:hover { background: rgba(16,179,255,0.18); border-color: var(--cyan-500); }
@@ -836,7 +839,8 @@ body {
   background: #070f1a;
 }
 
-.gal3d-close {
+.gal3d-close,
+.gal3d-home {
   position: fixed;
   top: 1.2rem;
   right: 1.2rem;
@@ -857,7 +861,8 @@ body {
   transition: background 0.2s, border-color 0.2s;
 }
 
-.gal3d-close:hover { background: rgba(16,179,255,0.25); border-color: var(--cyan-500); }
+.gal3d-close:hover,
+.gal3d-home:hover { background: rgba(16,179,255,0.25); border-color: var(--cyan-500); }
 
 .gal3d-badge {
   position: fixed;
@@ -1041,7 +1046,8 @@ body {
 .gal3d-topbar { position: absolute; inset: 1rem 1rem auto; z-index: 6; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 0.8rem; pointer-events: none; }
 .gal3d-topbar > * { pointer-events: auto; }
 .gal3d-topbar .gal3d-badge { position: static; justify-self: start; max-width: 100%; padding: 0.7rem; background: rgba(27,45,52,0.9); border-color: rgba(255,255,255,0.16); border-radius: 8px; }
-.gal3d-topbar .gal3d-close { position: static; justify-self: end; font-size: 0.78rem; padding: 0.7rem 0.85rem; border-radius: 8px; background: rgba(27,45,52,0.9); white-space: nowrap; }
+.gal3d-actions { justify-self: end; display: flex; gap: 0.45rem; }
+.gal3d-topbar .gal3d-close, .gal3d-topbar .gal3d-home { position: static; font-size: 0.78rem; padding: 0.7rem 0.85rem; border-radius: 8px; background: rgba(27,45,52,0.9); white-space: nowrap; }
 .gal3d-topbar #gal3d-badge-school { max-width: 220px; font-size: 0.7rem; color: #bbced2; }
 .gal3d-topbar .gal3d-badge-sub { display: block; max-width: 240px; margin-top: 0.18rem; font-size: 0.78rem; color: #fff; text-transform: none; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gal3d-weather { grid-column: 1 / -1; display: flex; align-items: center; gap: 0.7rem; justify-self: start; max-width: 100%; padding: 0.3rem 0.4rem 0.3rem 0.7rem; background: rgba(27,45,52,0.9); color: #fff; border: 1px solid rgba(255,255,255,0.16); border-radius: 8px; }
@@ -1056,7 +1062,9 @@ body {
 @media (max-width: 820px) {
   .gal3d-topbar { top: max(0.7rem, env(safe-area-inset-top)); right: max(0.7rem, env(safe-area-inset-right)); bottom: auto; left: max(0.7rem, env(safe-area-inset-left)); grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; }
   .gal3d-topbar .gal3d-badge { grid-column: 1; grid-row: 1; }
-  .gal3d-topbar .gal3d-close { grid-column: 2; grid-row: 1; font-size: 0; padding: 0.7rem; }
+  .gal3d-actions { grid-column: 2; grid-row: 1; }
+  .gal3d-topbar .gal3d-close { font-size: 0; padding: 0.7rem; }
+  .gal3d-topbar .gal3d-home { padding: 0.7rem; }
   .gal3d-topbar .gal3d-close span { font-size: 1rem; }
   .gal3d-topbar #gal3d-badge-school, .gal3d-topbar .gal3d-badge-sub { max-width: calc(100vw - 145px); }
   .gal3d-hint { top: auto; bottom: 10.8rem; left: 0.7rem; transform: none; width: auto; max-width: calc(100vw - 1.4rem); font-size: 0.6rem; padding: 0.3rem 0.5rem; }
@@ -1066,7 +1074,6 @@ body {
 @media (max-width: 820px) and (max-height: 600px) {
   .gal3d-hint { display: none; }
   .gal3d-topbar { grid-template-columns: minmax(0, 1fr) auto; }
-  .gal3d-topbar .gal3d-close { grid-column: 2; }
   .gal3d-topbar #gal3d-badge-school { display: none; }
 }
 @media (pointer: coarse) {
@@ -1118,7 +1125,8 @@ body {
 .embed-mode .about-section,
 .embed-mode .site-footer,
 .embed-mode .radio-widget,
-.embed-mode #btn-back {
+.embed-mode #btn-back,
+.embed-mode .gal3d-home {
   display: none !important;
 }
 

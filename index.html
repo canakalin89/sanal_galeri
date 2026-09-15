@@ -78,7 +78,7 @@
   <!-- GALERİ SAYFASI -->
   <div id="view-gallery" class="hidden">
     <div class="gallery-header">
-      <button id="btn-back" aria-label="Geri">&#8592;</button>
+      <button id="btn-back" type="button" aria-label="Ana sayfaya dön"><span aria-hidden="true">&#8592;</span> Ana Sayfa</button>
       <div class="gallery-header-text">
         <h2 id="gallery-title"></h2>
       </div>
@@ -115,9 +115,14 @@
       </div>
     </div>
 
-    <button class="gal3d-close" id="gal3d-close" aria-label="2D galeriye dön">
-      <span>&#8592;</span> 2D Galeriye Dön
-    </button>
+    <div class="gal3d-actions">
+      <button class="gal3d-home" id="gal3d-home" type="button" aria-label="Ana sayfaya dön">
+        <span aria-hidden="true">&#8962;</span> Ana Sayfa
+      </button>
+      <button class="gal3d-close" id="gal3d-close" type="button" aria-label="2D galeriye dön">
+        <span aria-hidden="true">&#8592;</span> 2D Galeriye Dön
+      </button>
+    </div>
     <div class="gal3d-weather">
       <div class="gal3d-weather-copy">
         <span id="gal3d-weather-status" role="status">Hava durumu yükleniyor…</span>
