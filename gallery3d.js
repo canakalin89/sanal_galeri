@@ -814,7 +814,10 @@
     updateMovement(dt);
     session.game?.tick(dt);
     session.atmosphere?.tick(dt);
-    if (!document.hidden) session.neighborhood?.userData.sky.tick(dt, camera.position);
+    if (!document.hidden) {
+      session.neighborhood?.userData.sky.tick(dt, camera.position);
+      if (session.neighborhood && !session.neighborhood.userData.reducedMotion) GalleryNeighborhood.tick(session.neighborhood, dt);
+    }
     renderer.render(scene, camera);
 
     minimapFrameCount++;

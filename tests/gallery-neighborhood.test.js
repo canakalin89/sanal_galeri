@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { SITE, selectFeatures, buildingHeight } = require('../gallery-neighborhood');
+const { SITE, selectFeatures, buildingHeight, trafficRoutes } = require('../gallery-neighborhood');
 const data = require('../assets/environment/kapakli.json');
 const { plan } = require('../gallery-layout');
 
@@ -31,4 +31,14 @@ test('harita yuksekligi varsa korunur, kat sayisi ve eksik veri olculu yorumlani
   assert.equal(buildingHeight({ tags: { 'building:levels': '6' } }), 18.6);
   assert.equal(buildingHeight({ tags: { building: 'industrial' } }), 8);
   assert.equal(buildingHeight({ tags: { height: '-5' } }), 6.2);
+});
+
+test('trafik yalnizca salon disindaki gercek arac yollarini kullanir', () => {
+  const room = plan(28);
+  for (const mobile of [true, false]) {
+    const routes = trafficRoutes(selectFeatures(data, room, mobile).roads, room, mobile);
+    assert.ok(routes.length > 0 && routes.length <= (mobile ? 3 : 5));
+    assert.ok(routes.every(route => route.distance > room.depth / 2 + 4 && route.length > 55));
+    assert.ok(routes.every(route => route.points.length >= 2));
+  }
 });

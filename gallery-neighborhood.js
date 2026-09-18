@@ -43,6 +43,92 @@
     return feature.tags.building === 'industrial' ? 8 : feature.tags.building === 'service' ? 3 : feature.tags.building === 'school' ? 12.4 : 6.2;
   }
 
+  function trafficRoutes(roads, plan, mobile) {
+    return roads.filter(road => !['track', 'path', 'footway', 'pedestrian', 'steps', 'cycleway'].includes(road.tags.highway))
+      .map(road => ({
+        points: road.points,
+        distance: Math.min(...road.points.map(([x, z]) => Math.hypot(x, z))),
+        length: road.points.slice(1).reduce((sum, point, index) => sum + Math.hypot(point[0] - road.points[index][0], point[1] - road.points[index][1]), 0)
+      }))
+      .filter(road => road.distance > Math.max(plan.width, plan.depth) / 2 + 4 && road.distance < 260 && road.length > 55)
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, mobile ? 3 : 5);
+  }
+
+  function addTraffic(THREE, group, roads, plan, mobile) {
+    const routes = trafficRoutes(roads, plan, mobile);
+    if (!routes.length) return;
+    const kinds = mobile ? ['minibus', 'truck', 'lorry', 'minibus', 'car'] :
+      ['minibus', 'truck', 'lorry', 'minibus', 'car', 'minibus', 'truck', 'lorry'];
+    const glass = new THREE.MeshStandardMaterial({ color: 0x7696a2, metalness: 0.08, roughness: 0.2 });
+    const rubber = new THREE.MeshStandardMaterial({ color: 0x202326, roughness: 1 });
+    const lamp = new THREE.MeshBasicMaterial({ color: 0xfff0b8, toneMapped: false });
+    const beam = new THREE.MeshBasicMaterial({ color: 0xffe8ae, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide });
+    const wheelGeometry = new THREE.CylinderGeometry(0.35, 0.35, 0.2, 8);
+    const lightGeometry = new THREE.BoxGeometry(0.22, 0.18, 0.08);
+    const beamGeometry = new THREE.ConeGeometry(1.15, 7, 8, 1, true);
+    beamGeometry.rotateX(-Math.PI / 2);
+    const vehicles = kinds.map((kind, index) => {
+      const route = routes[index % routes.length];
+      const curve = new THREE.CatmullRomCurve3(route.points.map(([x, z]) => new THREE.Vector3(x, 0, z)));
+      const length = curve.getLength();
+      const vehicle = new THREE.Group();
+      const cargo = kind === 'lorry', truck = kind === 'truck', minibus = kind === 'minibus';
+      const bodyLength = cargo ? 8.8 : truck ? 5.8 : minibus ? 5.2 : 3.8;
+      const bodyWidth = cargo ? 2.35 : truck ? 2.15 : minibus ? 1.9 : 1.75;
+      const color = [0xf2eee1, 0x4a7185, 0xc6d1cf, 0xe9e2cf, 0x9b4c45, 0xd4c6a8, 0x74816d, 0xc9c8c0][index];
+      const paint = new THREE.MeshStandardMaterial({ color, roughness: 0.62, metalness: 0.1 });
+      const cargoPaint = new THREE.MeshStandardMaterial({ color: cargo ? 0xd6d3c9 : 0xb4b6af, roughness: 0.8 });
+      function box(width, height, depth, x, y, z, material) {
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
+        mesh.position.set(x, y, z); vehicle.add(mesh);
+      }
+      box(bodyWidth, 0.6, bodyLength, 0, 0.78, 0, paint);
+      if (cargo || truck) {
+        box(bodyWidth - 0.15, 2.1, cargo ? 5.8 : 3.2, 0, 1.9, cargo ? -1.3 : -0.7, cargoPaint);
+        box(bodyWidth - 0.2, 1.55, 2.2, 0, 1.65, bodyLength / 2 - 1.1, paint);
+        box(bodyWidth - 0.35, 0.58, 0.05, 0, 1.95, bodyLength / 2 + 0.02, glass);
+      } else {
+        box(bodyWidth - 0.12, minibus ? 1.45 : 0.9, bodyLength - 0.75, 0, minibus ? 1.6 : 1.45, -0.15, paint);
+        box(bodyWidth - 0.28, minibus ? 0.55 : 0.4, 0.05, 0, minibus ? 1.85 : 1.65, bodyLength / 2 - 0.48, glass);
+        if (minibus) for (const side of [-1, 1]) for (const z of [-1.4, -0.3, 0.8]) box(0.05, 0.58, 0.82, side * (bodyWidth / 2 - 0.05), 1.86, z, glass);
+      }
+      for (const side of [-1, 1]) for (const z of [-bodyLength * 0.32, bodyLength * 0.32]) {
+        const wheel = new THREE.Mesh(wheelGeometry, rubber);
+        wheel.rotation.z = Math.PI / 2;
+        wheel.position.set(side * bodyWidth / 2, 0.36, z);
+        vehicle.add(wheel);
+      }
+      const lights = new THREE.Group();
+      for (const side of [-1, 1]) {
+        const headlight = new THREE.Mesh(lightGeometry, lamp);
+        headlight.position.set(side * bodyWidth * 0.34, 0.88, bodyLength / 2 + 0.05);
+        lights.add(headlight);
+      }
+      const glow = new THREE.Mesh(beamGeometry, beam);
+      glow.position.set(0, 0.75, bodyLength / 2 + 3.2);
+      lights.add(glow);
+      vehicle.add(lights);
+      group.add(vehicle);
+      return { vehicle, lights, curve, length, speed: kind === 'car' ? 9 : kind === 'minibus' ? 7 : 5.5, phase: (index + 0.4) / kinds.length };
+    });
+    group.userData.traffic = { vehicles, time: 0 };
+  }
+
+  function tick(group, dt) {
+    const traffic = group.userData.traffic;
+    if (!traffic) return;
+    traffic.time += dt;
+    for (const item of traffic.vehicles) {
+      const progress = (traffic.time * item.speed / item.length + item.phase) % 2;
+      const forward = progress < 1;
+      const t = forward ? progress : 2 - progress;
+      const point = item.curve.getPointAt(t), tangent = item.curve.getTangentAt(t);
+      item.vehicle.position.set(point.x, GROUND_Y + 0.04, point.z);
+      item.vehicle.rotation.y = Math.atan2(tangent.x, tangent.z) + (forward ? 0 : Math.PI);
+    }
+  }
+
   function facadeTextures(THREE) {
     const canvas = document.createElement('canvas'); canvas.width = canvas.height = 256;
     const emissive = document.createElement('canvas'); emissive.width = emissive.height = 256;
@@ -108,6 +194,7 @@
     group.userData.sky = sky;
     group.userData.facades = [];
     group.userData.weatherSurfaces = [];
+    group.userData.reducedMotion = reducedMotion;
     return group;
   }
 
@@ -183,6 +270,7 @@
         }
       }
     }
+    addTraffic(THREE, group, selected.roads, plan, mobile);
     for (const feature of selected.buildings) {
       const points = feature.points, height = buildingHeight(feature);
       const b = bounds(points), near = Math.hypot((b.minX+b.maxX)/2,(b.minZ+b.maxZ)/2) < 200;
@@ -242,9 +330,10 @@
 
   function update(THREE, group, cycle, sunPosition, weather, report) {
     group.userData.sky.update(cycle,sunPosition,weather,report);
+    for (const item of group.userData.traffic?.vehicles || []) item.lights.visible = cycle.daylight < 0.35;
     for(const facade of group.userData.facades) facade.emissiveIntensity=(1-cycle.daylight)*0.8;
     for(const surface of group.userData.weatherSurfaces) surface.roughness=weather?.rain ? 0.42 : 0.96;
   }
 
-  return { SITE, selectFeatures, buildingHeight, create, populate, update };
+  return { SITE, selectFeatures, buildingHeight, trafficRoutes, create, populate, update, tick };
 });
