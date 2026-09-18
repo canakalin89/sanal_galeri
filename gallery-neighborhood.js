@@ -55,11 +55,39 @@
       .slice(0, mobile ? 3 : 5);
   }
 
+  function flightProgress(time) {
+    const progress = (time % 85 - 10) / 18;
+    return progress >= 0 && progress < 1 ? progress : null;
+  }
+
+  function addAirplane(THREE, group) {
+    const plane = new THREE.Group();
+    plane.name = 'Cam tavanin ustunden gecen ucak';
+    const body = new THREE.MeshStandardMaterial({ color: 0xe7e9e8, metalness: 0.2, roughness: 0.62, side: THREE.DoubleSide });
+    const trim = new THREE.MeshStandardMaterial({ color: 0x677d8e, metalness: 0.15, roughness: 0.65 });
+    function part(width, height, depth, x, y, z, material) {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
+      mesh.position.set(x, y, z); plane.add(mesh);
+    }
+    part(0.95, 0.85, 8, 0, 0, 0, body);
+    part(11, 0.16, 1.25, 0, 0, 0.3, body);
+    part(3.8, 0.13, 0.75, 0, 0.15, -3.25, body);
+    part(0.14, 1.25, 1.1, 0, 0.65, -3.3, trim);
+    part(0.75, 0.18, 1.4, 0, -0.08, 2.65, trim);
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.46, 1.4, 8), body);
+    nose.rotation.x = Math.PI / 2; nose.position.z = 4.65; plane.add(nose);
+    plane.rotation.y = Math.atan2(240, -70);
+    plane.visible = false;
+    group.add(plane);
+    group.userData.airplane = plane;
+    group.userData.flightTime = 0;
+  }
+
   function addTraffic(THREE, group, roads, plan, mobile) {
     const routes = trafficRoutes(roads, plan, mobile);
     if (!routes.length) return;
-    const kinds = mobile ? ['minibus', 'truck', 'lorry', 'minibus', 'car'] :
-      ['minibus', 'truck', 'lorry', 'minibus', 'car', 'minibus', 'truck', 'lorry'];
+    const kinds = mobile ? ['minibus', 'truck', 'car', 'minibus', 'lorry', 'car', 'minibus', 'truck'] :
+      ['minibus', 'truck', 'car', 'lorry', 'minibus', 'car', 'truck', 'minibus', 'lorry', 'car', 'minibus', 'truck', 'car', 'lorry', 'minibus', 'truck'];
     const glass = new THREE.MeshStandardMaterial({ color: 0x7696a2, metalness: 0.08, roughness: 0.2 });
     const rubber = new THREE.MeshStandardMaterial({ color: 0x202326, roughness: 1 });
     const lamp = new THREE.MeshBasicMaterial({ color: 0xfff0b8, toneMapped: false });
@@ -76,7 +104,7 @@
       const cargo = kind === 'lorry', truck = kind === 'truck', minibus = kind === 'minibus';
       const bodyLength = cargo ? 8.8 : truck ? 5.8 : minibus ? 5.2 : 3.8;
       const bodyWidth = cargo ? 2.35 : truck ? 2.15 : minibus ? 1.9 : 1.75;
-      const color = [0xf2eee1, 0x4a7185, 0xc6d1cf, 0xe9e2cf, 0x9b4c45, 0xd4c6a8, 0x74816d, 0xc9c8c0][index];
+      const color = [0xf2eee1, 0x4a7185, 0xc6d1cf, 0xe9e2cf, 0x9b4c45, 0xd4c6a8, 0x74816d, 0xc9c8c0][index % 8];
       const paint = new THREE.MeshStandardMaterial({ color, roughness: 0.62, metalness: 0.1 });
       const cargoPaint = new THREE.MeshStandardMaterial({ color: cargo ? 0xd6d3c9 : 0xb4b6af, roughness: 0.8 });
       function box(width, height, depth, x, y, z, material) {
@@ -116,6 +144,11 @@
   }
 
   function tick(group, dt) {
+    group.userData.flightTime += dt;
+    const flight = flightProgress(group.userData.flightTime);
+    const plane = group.userData.airplane;
+    plane.visible = flight !== null;
+    if (flight !== null) plane.position.set(-120 + 240 * flight, 48, 35 - 70 * flight);
     const traffic = group.userData.traffic;
     if (!traffic) return;
     traffic.time += dt;
@@ -192,6 +225,7 @@
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(2400, 2400), groundMaterial);
     ground.rotation.x = -Math.PI / 2; ground.position.y = GROUND_Y - 0.08; group.add(ground);
     group.userData.sky = sky;
+    addAirplane(THREE, group);
     group.userData.facades = [];
     group.userData.weatherSurfaces = [];
     group.userData.reducedMotion = reducedMotion;
@@ -335,5 +369,5 @@
     for(const surface of group.userData.weatherSurfaces) surface.roughness=weather?.rain ? 0.42 : 0.96;
   }
 
-  return { SITE, selectFeatures, buildingHeight, trafficRoutes, create, populate, update, tick };
+  return { SITE, selectFeatures, buildingHeight, trafficRoutes, flightProgress, create, populate, update, tick };
 });

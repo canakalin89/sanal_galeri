@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { SITE, selectFeatures, buildingHeight, trafficRoutes } = require('../gallery-neighborhood');
+const { SITE, selectFeatures, buildingHeight, trafficRoutes, flightProgress } = require('../gallery-neighborhood');
 const data = require('../assets/environment/kapakli.json');
 const { plan } = require('../gallery-layout');
 
@@ -41,4 +41,12 @@ test('trafik yalnizca salon disindaki gercek arac yollarini kullanir', () => {
     assert.ok(routes.every(route => route.distance > room.depth / 2 + 4 && route.length > 55));
     assert.ok(routes.every(route => route.points.length >= 2));
   }
+});
+
+test('ucak kisa gecisler yapar ve gecisler arasinda gorunmez', () => {
+  assert.equal(flightProgress(9), null);
+  assert.equal(flightProgress(10), 0);
+  assert.equal(flightProgress(19), 0.5);
+  assert.equal(flightProgress(28), null);
+  assert.equal(flightProgress(95), 0);
 });
