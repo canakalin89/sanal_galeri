@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { SITE, selectFeatures, buildingHeight, trafficRoutes, flightProgress } = require('../gallery-neighborhood');
+const { SITE, selectFeatures, buildingHeight, trafficRoutes, trafficPhase, flightProgress, flightLightState } = require('../gallery-neighborhood');
 const data = require('../assets/environment/kapakli.json');
 const { plan } = require('../gallery-layout');
 
@@ -40,7 +40,19 @@ test('trafik yalnizca salon disindaki gercek arac yollarini kullanir', () => {
     assert.ok(routes.length > 0 && routes.length <= (mobile ? 3 : 5));
     assert.ok(routes.every(route => route.distance > room.depth / 2 + 4 && route.length > 55));
     assert.ok(routes.every(route => route.points.length >= 2));
+    assert.ok(routes.every(route => Math.hypot(...route.points[0]) > 260 && Math.hypot(...route.points.at(-1)) > 260));
+    const edges = new Set(selectFeatures(data, room, mobile).roads.flatMap(road => road.points.slice(1).map((point, i) =>
+      [road.points[i].join(','), point.join(',')].sort().join('|'))));
+    for (const route of routes) for (let i = 1; i < route.points.length; i++)
+      assert.ok(edges.has([route.points[i - 1].join(','), route.points[i].join(',')].sort().join('|')));
   }
+});
+
+test('araclar yol bitiminde geri sekmez; gorus disinda yeni tur baslar', () => {
+  assert.ok(trafficPhase(20, 1, 100, 0, 1) < trafficPhase(21, 1, 100, 0, 1));
+  assert.ok(trafficPhase(20, 1, 100, 0, -1) > trafficPhase(21, 1, 100, 0, -1));
+  assert.equal(trafficPhase(100, 1, 100, 0, 1), 0);
+  assert.equal(trafficPhase(100, 1, 100, 0, -1), 1);
 });
 
 test('ucak kisa gecisler yapar ve gecisler arasinda gorunmez', () => {
@@ -49,4 +61,7 @@ test('ucak kisa gecisler yapar ve gecisler arasinda gorunmez', () => {
   assert.equal(flightProgress(19), 0.5);
   assert.equal(flightProgress(28), null);
   assert.equal(flightProgress(95), 0);
+  assert.deepEqual(flightLightState(0.05, 0.2), { night: true, strobe: true, beacon: true });
+  assert.deepEqual(flightLightState(0.3, 0.2), { night: true, strobe: false, beacon: false });
+  assert.equal(flightLightState(0.05, 1).night, false);
 });

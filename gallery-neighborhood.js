@@ -44,20 +44,85 @@
   }
 
   function trafficRoutes(roads, plan, mobile) {
-    return roads.filter(road => !['track', 'path', 'footway', 'pedestrian', 'steps', 'cycleway'].includes(road.tags.highway))
-      .map(road => ({
-        points: road.points,
-        distance: Math.min(...road.points.map(([x, z]) => Math.hypot(x, z))),
-        length: road.points.slice(1).reduce((sum, point, index) => sum + Math.hypot(point[0] - road.points[index][0], point[1] - road.points[index][1]), 0)
-      }))
-      .filter(road => road.distance > Math.max(plan.width, plan.depth) / 2 + 4 && road.distance < 260 && road.length > 55)
-      .sort((a, b) => a.distance - b.distance)
-      .slice(0, mobile ? 3 : 5);
+    const clearance = Math.max(plan.width, plan.depth) / 2 + 4;
+    const roadways = roads.filter(road => !['track', 'path', 'footway', 'pedestrian', 'steps', 'cycleway'].includes(road.tags.highway));
+    const nodes = new Map(), key = point => point.join(',');
+    const node = point => {
+      const id = key(point);
+      if (!nodes.has(id)) nodes.set(id, { id, point, next: [] });
+      return nodes.get(id);
+    };
+    for (const road of roadways) for (let i = 1; i < road.points.length; i++) {
+      const a = node(road.points[i - 1]), b = node(road.points[i]);
+      if (a.id !== b.id && Math.hypot(...a.point) > clearance && Math.hypot(...b.point) > clearance) {
+        if (!a.next.includes(b)) a.next.push(b);
+        if (!b.next.includes(a)) b.next.push(a);
+      }
+    }
+    const seeds = roadways.map(road => ({
+      points: road.points,
+      distance: Math.min(...road.points.map(point => Math.hypot(...point))),
+      length: road.points.slice(1).reduce((sum, point, i) => sum + Math.hypot(point[0] - road.points[i][0], point[1] - road.points[i][1]), 0)
+    })).filter(road => road.distance > clearance && road.distance < 260 && road.length > 55)
+      .sort((a, b) => a.distance - b.distance);
+    const extend = (anchor, first) => {
+      const path = [anchor.point], seen = new Set([anchor.id]);
+      let previous = anchor, current = first;
+      for (let step = 0; step < 80; step++) {
+        if (seen.has(current.id)) return null;
+        seen.add(current.id); path.push(current.point);
+        if (Math.hypot(...current.point) > 260) return path;
+        const dx = current.point[0] - previous.point[0], dz = current.point[1] - previous.point[1];
+        const options = current.next.filter(next => !seen.has(next.id))
+          .sort((a, b) => {
+            const score = next => {
+              const x = next.point[0] - current.point[0], z = next.point[1] - current.point[1];
+              return (dx * x + dz * z) / Math.hypot(x, z);
+            };
+            return score(b) - score(a);
+          });
+        if (!options.length) return null;
+        previous = current; current = options[0];
+      }
+      return null;
+    };
+    const routes = [], signatures = new Set();
+    for (const seed of seeds) {
+      const anchors = seed.points.map(point => nodes.get(key(point)))
+        .filter(candidate => candidate.next.length >= 2 && Math.hypot(...candidate.point) < 260)
+        .sort((a, b) => Math.hypot(...a.point) - Math.hypot(...b.point));
+      for (const anchor of anchors) {
+        let added = false;
+        for (let i = 0; i < anchor.next.length && !added; i++) for (let j = i + 1; j < anchor.next.length && !added; j++) {
+          const left = extend(anchor, anchor.next[i]), right = extend(anchor, anchor.next[j]);
+          if (!left || !right || right.slice(1).some(point => left.slice(1).some(other => key(point) === key(other)))) continue;
+          const points = left.slice(1).reverse().concat(right);
+          const signature = [key(points[0]), key(points.at(-1))].sort().join('|');
+          if (signatures.has(signature)) continue;
+          signatures.add(signature);
+          routes.push({ points, distance: Math.min(...points.map(point => Math.hypot(...point))),
+            length: points.slice(1).reduce((sum, point, index) => sum + Math.hypot(point[0] - points[index][0], point[1] - points[index][1]), 0) });
+          added = true;
+        }
+        if (added) break;
+      }
+      if (routes.length >= (mobile ? 3 : 5)) break;
+    }
+    return routes;
   }
 
   function flightProgress(time) {
     const progress = (time % 85 - 10) / 18;
     return progress >= 0 && progress < 1 ? progress : null;
+  }
+
+  function flightLightState(time, daylight) {
+    return { night: daylight < 0.35, strobe: time % 1.2 < 0.12, beacon: time % 0.9 < 0.18 };
+  }
+
+  function trafficPhase(time, speed, length, phase, direction) {
+    const progress = (time * speed / length + phase) % 1;
+    return direction > 0 ? progress : 1 - progress;
   }
 
   function addAirplane(THREE, group) {
@@ -76,6 +141,23 @@
     part(0.75, 0.18, 1.4, 0, -0.08, 2.65, trim);
     const nose = new THREE.Mesh(new THREE.ConeGeometry(0.46, 1.4, 8), body);
     nose.rotation.x = Math.PI / 2; nose.position.z = 4.65; plane.add(nose);
+    const lights = new THREE.Group(), bulb = new THREE.SphereGeometry(0.25, 8, 6);
+    const red = new THREE.MeshBasicMaterial({ color: 0xff3030, toneMapped: false });
+    const green = new THREE.MeshBasicMaterial({ color: 0x38ff79, toneMapped: false });
+    const white = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
+    function light(x, y, z, material) {
+      const mesh = new THREE.Mesh(bulb, material);
+      mesh.position.set(x, y, z); lights.add(mesh);
+      return mesh;
+    }
+    light(-5.48, -0.08, 0.3, red);
+    light(5.48, -0.08, 0.3, green);
+    light(0, 0.18, -3.68, white);
+    for (const side of [-1, 1]) light(side * 0.58, -0.34, 2.9, white);
+    const strobes = [-1, 1].map(side => light(side * 5.37, -0.18, 0.3, white));
+    const beacon = light(0, -0.48, 0, red);
+    lights.visible = false; plane.add(lights);
+    plane.userData.lights = { group: lights, strobes, beacon };
     plane.rotation.y = Math.atan2(240, -70);
     plane.visible = false;
     group.add(plane);
@@ -91,14 +173,16 @@
     const glass = new THREE.MeshStandardMaterial({ color: 0x7696a2, metalness: 0.08, roughness: 0.2 });
     const rubber = new THREE.MeshStandardMaterial({ color: 0x202326, roughness: 1 });
     const lamp = new THREE.MeshBasicMaterial({ color: 0xfff0b8, toneMapped: false });
-    const beam = new THREE.MeshBasicMaterial({ color: 0xffe8ae, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide });
+    const tailLamp = new THREE.MeshBasicMaterial({ color: 0xff3028, toneMapped: false });
     const wheelGeometry = new THREE.CylinderGeometry(0.35, 0.35, 0.2, 8);
     const lightGeometry = new THREE.BoxGeometry(0.22, 0.18, 0.08);
-    const beamGeometry = new THREE.ConeGeometry(1.15, 7, 8, 1, true);
-    beamGeometry.rotateX(-Math.PI / 2);
     const vehicles = kinds.map((kind, index) => {
       const route = routes[index % routes.length];
-      const curve = new THREE.CatmullRomCurve3(route.points.map(([x, z]) => new THREE.Vector3(x, 0, z)));
+      const curve = new THREE.CurvePath();
+      for (let i = 1; i < route.points.length; i++) {
+        const [ax, az] = route.points[i - 1], [bx, bz] = route.points[i];
+        curve.add(new THREE.LineCurve3(new THREE.Vector3(ax, 0, az), new THREE.Vector3(bx, 0, bz)));
+      }
       const length = curve.getLength();
       const vehicle = new THREE.Group();
       const cargo = kind === 'lorry', truck = kind === 'truck', minibus = kind === 'minibus';
@@ -132,13 +216,14 @@
         const headlight = new THREE.Mesh(lightGeometry, lamp);
         headlight.position.set(side * bodyWidth * 0.34, 0.88, bodyLength / 2 + 0.05);
         lights.add(headlight);
+        const taillight = new THREE.Mesh(lightGeometry, tailLamp);
+        taillight.position.set(side * bodyWidth * 0.34, 0.88, -bodyLength / 2 - 0.05);
+        lights.add(taillight);
       }
-      const glow = new THREE.Mesh(beamGeometry, beam);
-      glow.position.set(0, 0.75, bodyLength / 2 + 3.2);
-      lights.add(glow);
       vehicle.add(lights);
+      vehicle.visible = false;
       group.add(vehicle);
-      return { vehicle, lights, curve, length, speed: kind === 'car' ? 9 : kind === 'minibus' ? 7 : 5.5, phase: (index + 0.4) / kinds.length };
+      return { vehicle, lights, curve, length, direction: index % 2 ? -1 : 1, speed: kind === 'car' ? 9 : kind === 'minibus' ? 7 : 5.5, phase: (index + 0.4) / kinds.length };
     });
     group.userData.traffic = { vehicles, time: 0 };
   }
@@ -149,16 +234,23 @@
     const plane = group.userData.airplane;
     plane.visible = flight !== null;
     if (flight !== null) plane.position.set(-120 + 240 * flight, 48, 35 - 70 * flight);
+    const flightLights = flightLightState(group.userData.flightTime, group.userData.daylight ?? 1);
+    plane.userData.lights.group.visible = flightLights.night;
+    plane.userData.lights.strobes.forEach(strobe => { strobe.visible = flightLights.strobe; });
+    plane.userData.lights.beacon.visible = flightLights.beacon;
     const traffic = group.userData.traffic;
     if (!traffic) return;
     traffic.time += dt;
     for (const item of traffic.vehicles) {
-      const progress = (traffic.time * item.speed / item.length + item.phase) % 2;
-      const forward = progress < 1;
-      const t = forward ? progress : 2 - progress;
-      const point = item.curve.getPointAt(t), tangent = item.curve.getTangentAt(t);
-      item.vehicle.position.set(point.x, GROUND_Y + 0.04, point.z);
-      item.vehicle.rotation.y = Math.atan2(tangent.x, tangent.z) + (forward ? 0 : Math.PI);
+      const t = trafficPhase(traffic.time, item.speed, item.length, item.phase, item.direction);
+      const point = item.curve.getPoint(t);
+      const look = Math.min(0.03, 2 / item.length);
+      const tangent = item.curve.getPoint(Math.min(1, t + look))
+        .sub(item.curve.getPoint(Math.max(0, t - look))).normalize().multiplyScalar(item.direction);
+      const lane = 1.2;
+      item.vehicle.position.set(point.x + tangent.z * lane, GROUND_Y + 0.04, point.z - tangent.x * lane);
+      item.vehicle.rotation.y = Math.atan2(tangent.x, tangent.z);
+      item.vehicle.visible = Math.hypot(point.x, point.z) < 260;
     }
   }
 
@@ -292,7 +384,7 @@
     }
     for (const road of selected.roads) {
       const dirt = ['track','path','footway'].includes(road.tags.highway) || ['ground','dirt','unpaved'].includes(road.tags.surface);
-      const width = dirt ? 3 : road.tags.highway === 'service' ? 4 : road.tags.highway === 'residential' ? 6 : 8;
+      const width = dirt ? 3 : road.tags.highway === 'service' ? 5 : road.tags.highway === 'residential' ? 6 : 8;
       for (let i=1;i<road.points.length;i++) {
         const a=road.points[i-1], b=road.points[i];
         if (!dirt) strip(a,b,width+2.2,0.012,'sidewalk');
@@ -364,10 +456,11 @@
 
   function update(THREE, group, cycle, sunPosition, weather, report) {
     group.userData.sky.update(cycle,sunPosition,weather,report);
+    group.userData.daylight = cycle.daylight;
     for (const item of group.userData.traffic?.vehicles || []) item.lights.visible = cycle.daylight < 0.35;
     for(const facade of group.userData.facades) facade.emissiveIntensity=(1-cycle.daylight)*0.8;
     for(const surface of group.userData.weatherSurfaces) surface.roughness=weather?.rain ? 0.42 : 0.96;
   }
 
-  return { SITE, selectFeatures, buildingHeight, trafficRoutes, flightProgress, create, populate, update, tick };
+  return { SITE, selectFeatures, buildingHeight, trafficRoutes, trafficPhase, flightProgress, flightLightState, create, populate, update, tick };
 });
