@@ -7,14 +7,14 @@ test('cam tavan 1-2000 eser icin acik alanlari ve tasiyici araliklarini korur', 
   for (const total of [1,3,12,28,100,2000]) {
     const room = plan(total), roof = layout(room);
     assert.equal(roof.bays.length, room.partitions.length + 1);
-    assert.ok(roof.ridgeHeight > room.height && roof.ridgeHeight <= room.height + 1.26);
+    assert.ok(roof.ridgeHeight > room.height && roof.ridgeHeight <= room.height + 1.66);
     assert.ok(roof.rafters.some(z => Math.abs(z) < 0.000001));
     let glassArea = 0;
     for (const bay of roof.bays) {
       assert.ok(bay.minX > -room.width/2 && bay.maxX < room.width/2 && bay.maxX > bay.minX);
       glassArea += (bay.maxX - bay.minX) * roof.halfDepth * 2;
     }
-    assert.ok(glassArea / (room.width * room.depth) > 0.55);
+    assert.ok(glassArea / (room.width * room.depth) > 0.8);
     for (let i=1;i<roof.rafters.length;i++) assert.ok(roof.rafters[i]-roof.rafters[i-1] <= 3.01);
   }
 });

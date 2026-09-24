@@ -7,12 +7,13 @@ test('1–2000 eserin tamamı tek salon planında bir kez yer alır', () => {
     const layout = plan(total);
     assert.equal(layout.count, total);
     assert.deepEqual(layout.slots.map(slot => slot.index), Array.from({ length: total }, (_, i) => i));
-    assert.ok(layout.depth <= ROW_CAPACITY * GAP + 3 + 1e-9);
+    assert.ok(layout.depth <= Math.max(8, (total <= 36 ? Math.ceil(total / 3) : ROW_CAPACITY) * GAP + 3) + 1e-9);
     assert.ok(layout.partitions.every(partition => partition.length < layout.depth));
     assert.ok(layout.decor.benches.length <= 8 && layout.decor.chandeliers.length <= 8);
     assert.ok(layout.obstacles.every(obstacle => Math.abs(obstacle.x) < layout.width / 2 && Math.abs(obstacle.z) < layout.depth / 2));
   }
-  assert.equal(plan(28).partitions.length, 1);
+  assert.equal(plan(28).partitions.length, 0);
+  assert.equal(plan(28).decor.benches.length, 4);
 });
 
 test('İç sergi duvarları dengeli koridorlar kurar; eserler yüzey sınırlarında kalır', () => {
@@ -35,6 +36,8 @@ test('İç sergi duvarları dengeli koridorlar kurar; eserler yüzey sınırlar�
       const coordinate = slot.wall === 'north' ? slot.position[0] : slot.position[2];
       const half = slot.wall === 'north' ? layout.width / 2 : layout.depth / 2;
       assert.ok(Math.abs(coordinate) + ART_WIDTH / 2 + 0.12 < half - 0.5);
+      if (slot.wall === 'west' || slot.wall === 'east')
+        assert.ok(Math.abs(coordinate) + ART_WIDTH / 2 + 0.12 < half - 1.59);
       assert.notEqual(slot.wall, 'south');
     }
     for (let i = 0; i < layout.slots.length; i++) for (let j = i + 1; j < layout.slots.length; j++) {

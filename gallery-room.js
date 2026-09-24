@@ -60,26 +60,56 @@
     group.add(floor);
     const roof = GalleryRoof.create(THREE, plan);
     group.add(roof);
-    box(0, h / 2, -d / 2 - 0.1, w + 0.4, h, 0.2, wall);
-    box(-w / 2 - 0.1, h / 2, 0, 0.2, h, d, wall);
-    box(w / 2 + 0.1, h / 2, 0, 0.2, h, d, wall);
+    const windowSill = 3.08, windowTop = h - 0.38;
+    const pane = (width, height, x, y, z, rotation = 0) => {
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, height), glass);
+      mesh.position.set(x, y, z); mesh.rotation.y = rotation; mesh.renderOrder = 2; group.add(mesh);
+    };
+    // Tabloların üzerindeki kesintisiz cam bant, salonun dört yanından gün ışığı alır.
+    box(0, windowSill / 2, -d / 2 - 0.1, w + 0.4, windowSill, 0.2, wall);
+    box(0, (windowTop + h) / 2, -d / 2 - 0.1, w + 0.4, h - windowTop, 0.2, wall);
+    pane(w, windowTop - windowSill, 0, (windowSill + windowTop) / 2, -d / 2 - 0.1);
+    for (let i = 0, count = Math.ceil(w / 2.8); i <= count; i++)
+      box(-w / 2 + i * w / count, (windowSill + windowTop) / 2, -d / 2 - 0.05, 0.055, windowTop - windowSill, 0.07, trim, false);
 
-    // Eser bulunmayan giris cephesindeki iki gercek aciklik dogal isigi salona alir.
+    // Yan cephelerde sanat eserlerinin arasındaki boş uçlar da yüksek pencere olur.
+    const sideWindowWidth = 1.24, sideCenters = [-d / 2 + 0.97, d / 2 - 0.97];
+    for (const side of [-1, 1]) {
+      const x = side * (w / 2 + 0.1);
+      const edges = [-d / 2, sideCenters[0] - sideWindowWidth / 2,
+        sideCenters[0] + sideWindowWidth / 2, sideCenters[1] - sideWindowWidth / 2,
+        sideCenters[1] + sideWindowWidth / 2, d / 2];
+      for (const [start, end] of [[edges[0], edges[1]], [edges[2], edges[3]], [edges[4], edges[5]]])
+        box(x, windowSill / 2, (start + end) / 2, 0.2, windowSill, end - start, wall);
+      box(x, (windowTop + h) / 2, 0, 0.2, h - windowTop, d, wall);
+      pane(d, windowTop - windowSill, x, (windowSill + windowTop) / 2, 0, side * Math.PI / 2);
+      for (const z of sideCenters) {
+        box(x, 0.31, z, 0.2, 0.62, sideWindowWidth, wall);
+        pane(sideWindowWidth, windowSill - 0.62, x, (0.62 + windowSill) / 2, z, side * Math.PI / 2);
+        for (const edge of [-1, 1])
+          box(x, (0.62 + windowTop) / 2, z + edge * sideWindowWidth / 2, 0.07, windowTop - 0.62, 0.055, trim, false);
+      }
+      box(x, windowSill, 0, 0.07, 0.055, d, trim, false);
+      for (let i = 0, count = Math.ceil(d / 2.8); i <= count; i++)
+        box(x, (windowSill + windowTop) / 2, -d / 2 + i * d / count, 0.07, windowTop - windowSill, 0.055, trim, false);
+    }
+
+    // Giriş cephesindeki geniş pencereler ve üst cam bant aynı sokağa bakar.
     const centerWallWidth = Math.min(4.2, w - 2.4);
     const sideSpan = (w - centerWallWidth) / 2;
     const openingWidth = Math.max(0.72, sideSpan - 0.48);
-    const openingBottom = 0.58, openingTop = h - 0.58;
-    box(0, h / 2, d / 2 + 0.1, centerWallWidth, h, 0.2, wall);
+    const openingBottom = 0.58, openingTop = windowTop;
+    box(0, windowSill / 2, d / 2 + 0.1, centerWallWidth, windowSill, 0.2, wall);
+    box(0, (windowTop + h) / 2, d / 2 + 0.1, w + 0.4, h - windowTop, 0.2, wall);
+    pane(centerWallWidth, windowTop - windowSill, 0, (windowSill + windowTop) / 2, d / 2 + 0.05, Math.PI);
     for (const side of [-1, 1]) {
       const centerX = side * (centerWallWidth / 2 + sideSpan / 2);
       box(centerX, openingBottom / 2, d / 2 + 0.1, sideSpan, openingBottom, 0.2, wall);
-      box(centerX, (openingTop + h) / 2, d / 2 + 0.1, sideSpan, h - openingTop, 0.2, wall);
       for (const edge of [-1, 1]) box(centerX + edge * (openingWidth / 2 + 0.12), (openingBottom + openingTop) / 2, d / 2 + 0.1, 0.24, openingTop - openingBottom, 0.2, wall);
       // Camın arkasına resim yapıştırılmaz; bütün pencereler aynı 3D çevreye bakar.
-      const pane = new THREE.Mesh(new THREE.PlaneGeometry(openingWidth, openingTop - openingBottom), glass);
-      pane.position.set(centerX, (openingBottom + openingTop) / 2, d / 2 + 0.05); pane.rotation.y = Math.PI; pane.renderOrder = 2; group.add(pane);
+      pane(openingWidth, openingTop - openingBottom, centerX, (openingBottom + openingTop) / 2, d / 2 + 0.05, Math.PI);
       box(centerX, (openingBottom + openingTop) / 2, d / 2 + 0.025, 0.045, openingTop - openingBottom, 0.035, trim, false);
-      box(centerX, openingBottom + (openingTop - openingBottom) * 0.53, d / 2 + 0.025, openingWidth, 0.045, 0.035, trim, false);
+      box(centerX, windowSill, d / 2 + 0.025, openingWidth, 0.045, 0.035, trim, false);
     }
     group.userData.dayNight = { glassMaterial: glass, roofGlassMaterial: roof.userData.glassMaterial };
     // İnce gölge derzi, açık meşe üst bant ve duvar boyunca ışık çizgisi.
@@ -95,9 +125,9 @@
     }
     // Çift yüzlü sergi duvarları koleksiyon büyüdükçe tek salonu dolu ve gezilebilir tutar.
     for (const partition of plan.partitions) {
-      box(partition.x, (h - 0.3) / 2, partition.z, 0.18, h - 0.3, partition.length, wall);
+      box(partition.x, GalleryLayout.PARTITION_HEIGHT / 2, partition.z, 0.18, GalleryLayout.PARTITION_HEIGHT, partition.length, wall);
       box(partition.x, 0.08, partition.z, 0.24, 0.16, partition.length, trim);
-      box(partition.x, h - 0.22, partition.z, 0.28, 0.14, partition.length, oak);
+      box(partition.x, GalleryLayout.PARTITION_HEIGHT - 0.07, partition.z, 0.28, 0.14, partition.length, oak);
     }
 
     function contactShadow(x, z, sx, sz, opacityScale = 1) {

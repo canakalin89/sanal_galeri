@@ -44,7 +44,7 @@ test('uc can uc isabette biter; oyun disinda hasar ve negatif can yoktur', () =>
 });
 
 test('tablolar oyuncuya sergi duvarinin icinden gitmek yerine ucundan dolasir', () => {
-  const room=plan(28), p=room.partitions[0];
+  const room=plan(50), p=room.partitions[0];
   const from={x:p.x-1.5,z:0},target={x:p.x+1.5,z:0};
   const first=waypoint(room,from,target);
   assert.equal(first.x,from.x);assert.ok(Math.abs(first.z)>p.length/2);

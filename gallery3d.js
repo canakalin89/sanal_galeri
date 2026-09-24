@@ -454,8 +454,8 @@
 
     const dayNight = run.room?.userData.dayNight;
     if (dayNight) {
-      dayNight.glassMaterial.opacity = 0.14 - cycle.daylight * 0.06;
-      dayNight.roofGlassMaterial.opacity = 0.2 - cycle.daylight * 0.08;
+      dayNight.glassMaterial.opacity = 0.2 - cycle.daylight * 0.07;
+      dayNight.roofGlassMaterial.opacity = 0.24 - cycle.daylight * 0.07;
       dayNight.roofGlassMaterial.roughness = conditions?.rain ? 0.22 : 0.1;
     }
     if (run.neighborhood) GalleryNeighborhood.update(THREE, run.neighborhood, cycle, sun.position, conditions, run.weather);

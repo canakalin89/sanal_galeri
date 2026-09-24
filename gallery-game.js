@@ -49,7 +49,7 @@
     let elapsed = 0, waveDelay = 0, shotDelay = 0, immune = 0, firing = false, paused = false, disposed = false;
     let effects = null, figureFactory = null, sphere, coreBlue, coreRed, haloBlue, haloRed, hitTime = 0;
     const owned = [], hud = el('gal3d-game-hud'), screen = el('gal3d-game-screen'), overlay = el('gal3d-overlay');
-    const blocks = plan.partitions.map(p => ({ min: { x:p.x-0.16,y:0,z:-p.length/2 }, max:{ x:p.x+0.16,y:plan.height-0.3,z:p.length/2 } }));
+    const blocks = plan.partitions.map(p => ({ min: { x:p.x-0.16,y:0,z:-p.length/2 }, max:{ x:p.x+0.16,y:GalleryLayout.PARTITION_HEIGHT,z:p.length/2 } }));
     const blocked = (a,b) => blocks.some(box => segmentHitsBox(a,b,box));
     const temp = new THREE.Vector3(), aim = new THREE.Vector3(), direction = new THREE.Vector3();
     function announce(text) { if (el('gal3d-game-message').textContent !== text) el('gal3d-game-message').textContent = text; }

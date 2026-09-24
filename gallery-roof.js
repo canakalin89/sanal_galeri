@@ -1,4 +1,4 @@
-// Koridorların üzerinde yükselen cam fenerler; bütün koleksiyon aynı salonda kalır.
+// Tek salonu neredeyse baştan başa örten eğimli cam çatı.
 (function (root, factory) {
   const api = factory();
   if (typeof module === 'object' && module.exports) module.exports = api;
@@ -6,13 +6,13 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   function layout(plan) {
     const edges = [-plan.width / 2, ...plan.partitions.map(p => p.x), plan.width / 2];
-    const halfDepth = plan.depth / 2 - 0.9;
+    const halfDepth = plan.depth / 2 - 0.28;
     const rows = Math.max(2, Math.ceil(halfDepth * 2 / 6) * 2);
     const base = plan.height + 0.2;
     const bays = edges.slice(0, -1).map((left, i) => {
-      const minX = left + (i === 0 ? 0.9 : 0.4);
-      const maxX = edges[i + 1] - (i === edges.length - 2 ? 0.9 : 0.4);
-      return { minX, maxX, centerX: (minX + maxX) / 2, rise: Math.min(1.05, (maxX - minX) * 0.19) };
+      const minX = left + (i === 0 ? 0.28 : 0.11);
+      const maxX = edges[i + 1] - (i === edges.length - 2 ? 0.28 : 0.11);
+      return { minX, maxX, centerX: (minX + maxX) / 2, rise: Math.min(1.45, (maxX - minX) * 0.31) };
     });
     return { bays, base, halfDepth, rows, width: plan.width, depth: plan.depth, ridgeHeight: base + Math.max(...bays.map(b => b.rise)),
       rafters: Array.from({ length: rows + 1 }, (_, i) => -halfDepth + i * halfDepth * 2 / rows) };
@@ -33,7 +33,7 @@
   }
 
   function create(THREE, plan) {
-    const roof = layout(plan), group = new THREE.Group(); group.name = 'Cam fener tavan';
+    const roof = layout(plan), group = new THREE.Group(); group.name = 'Eğimli cam tavan';
     const materials = {
       stone: new THREE.MeshStandardMaterial({ color: 0xdeddd5, roughness: 0.88 }),
       frame: new THREE.MeshStandardMaterial({ color: 0x354345, roughness: 0.46, metalness: 0.35 }),
@@ -57,17 +57,16 @@
       dummy.scale.set(width, delta.length(), depth); save(key);
     }
     const h = plan.height, w = plan.width, d = plan.depth;
-    // Kapalı çevre bandı ve sergi duvarlarının üstündeki dar taşıyıcı bantlar.
+    // İnce çevre bandı camı duvarlara bağlar; iç bölmelerin üzerinde opak bant yoktur.
     for (const side of [-1, 1]) {
-      box('stone', side * (w / 2 - 0.38), h + 0.06, 0, 1.04, 0.12, d + 0.28);
-      box('stone', 0, h + 0.06, side * (d / 2 - 0.38), w - 1.8, 0.12, 1.04);
+      box('stone', side * (w / 2 - 0.2), h + 0.06, 0, 0.48, 0.12, d + 0.28);
+      box('stone', 0, h + 0.06, side * (d / 2 - 0.2), w - 0.4, 0.12, 0.48);
     }
-    for (const partition of plan.partitions) box('stone', partition.x, h + 0.06, 0, 0.8, 0.12, roof.halfDepth * 2);
 
     for (const bay of roof.bays) {
       const width = bay.maxX - bay.minX, ridge = roof.base + bay.rise;
       for (const x of [bay.minX, bay.maxX]) {
-        box('stone', x, h + 0.16, 0, 0.16, 0.2, roof.halfDepth * 2);
+        box('frame', x, h + 0.16, 0, 0.24, 0.16, roof.halfDepth * 2);
         beam([x, roof.base, -roof.halfDepth], [x, roof.base, roof.halfDepth], 0.09, 0.11);
         box('light', x + (x < bay.centerX ? -0.09 : 0.09), h - 0.015, 0, 0.035, 0.025, roof.halfDepth * 2);
       }
@@ -75,8 +74,7 @@
       for (const z of roof.rafters) {
         beam([bay.minX, roof.base, z], [bay.centerX, ridge, z], 0.08, 0.13);
         beam([bay.centerX, ridge, z], [bay.maxX, roof.base, z], 0.08, 0.13);
-        // İnce ahşap alt kiriş çerçeveyi tamamlar; tavanda büyük opak ışık panosu yok.
-        box('oak', bay.centerX, h + 0.025, z, width, 0.15, 0.1);
+        box('frame', bay.centerX, h + 0.025, z, width, 0.08, 0.07);
       }
       for (let i = 0; i < roof.rows; i++) {
         const z = (roof.rafters[i] + roof.rafters[i + 1]) / 2;

@@ -8,13 +8,15 @@
   const ROW_CAPACITY = 7;
   const AISLE_WIDTH = 4.4;
   const ART_WIDTH = 2.1, ART_HEIGHT = 2.0, EYE_HEIGHT = 1.8;
+  const PARTITION_HEIGHT = 3.16;
 
   function plan(total) {
     if (!Number.isInteger(total) || total < 1) throw new Error('En az bir eser gerekli.');
-    const northCount = Math.min(3, total);
+    const openHall = total <= 36;
+    const northCount = openHall ? Math.min(total, Math.max(3, Math.round(total / 3))) : 3;
     const remaining = total - northCount;
     const neededSurfaces = remaining ? Math.ceil(remaining / ROW_CAPACITY) : 0;
-    const surfaceCount = remaining ? Math.max(2, Math.ceil(neededSurfaces / 2) * 2) : 0;
+    const surfaceCount = remaining ? openHall ? 2 : Math.max(2, Math.ceil(neededSurfaces / 2) * 2) : 0;
     const partitionCount = Math.max(0, surfaceCount / 2 - 1);
     const rows = surfaceCount ? Math.ceil(remaining / surfaceCount) : 0;
     const width = Math.max(8, northCount * GAP + 1.8, (partitionCount + 1) * AISLE_WIDTH);
@@ -50,12 +52,15 @@
     const decorCenters = aisleCenters.length <= 8 ? aisleCenters : Array.from({ length: 8 }, (_, index) =>
       aisleCenters[Math.round(index * (aisleCenters.length - 1) / 7)]
     );
-    const benches = total >= 4 ? decorCenters.map((x, index) => ({ x, z: index % 2 ? 1.2 : -1.2, rotation: 0 })) : [];
+    const spacious = openHall && total >= 12;
+    const benches = spacious ? [-1, 1].flatMap(side => [-1, 1].map(end => ({ x: side * width * 0.22, z: end * depth * 0.2, rotation: 0 }))) :
+      total >= 4 ? decorCenters.map((x, index) => ({ x, z: index % 2 ? 1.2 : -1.2, rotation: 0 })) : [];
     const plants = [
       { x: -width / 2 + 0.72, z: depth / 2 - 0.78, rotation: 0.3 },
       { x: width / 2 - 0.72, z: depth / 2 - 0.78, rotation: -0.4 },
       { x: -width / 2 + 0.72, z: -depth / 2 + 0.78, rotation: 1.1 },
-      { x: width / 2 - 0.72, z: -depth / 2 + 0.78, rotation: -1.2 }
+      { x: width / 2 - 0.72, z: -depth / 2 + 0.78, rotation: -1.2 },
+      ...(spacious ? [-1, 1].flatMap(side => [-1, 1].map(end => ({ x: side * width * 0.3, z: end * depth * 0.32, rotation: 0 }))) : [])
     ];
     const obstacles = [
       ...benches.map(bench => ({ type: 'box', x: bench.x, z: bench.z, halfX: 1.12, halfZ: 0.62 })),
@@ -63,8 +68,8 @@
     ];
     const spawnX = aisleCenters[Math.floor(aisleCenters.length / 2)];
     return {
-      count: total, start: 0, end: total, width, depth, height: 3.9, slots, partitions,
-      decor: { benches, plants, chandeliers: decorCenters.map(x => ({ x, z: 0 })) },
+      count: total, start: 0, end: total, width, depth, height: 5.2, slots, partitions,
+      decor: { benches, plants, chandeliers: spacious ? [-1, 1].flatMap(side => [-1, 1].map(end => ({ x: side * width * 0.23, z: end * depth * 0.23 }))) : decorCenters.map(x => ({ x, z: 0 })) },
       obstacles,
       spawn: [spawnX, 1.65, depth / 2 - 1.05]
     };
@@ -76,5 +81,5 @@
     return { width: width * scale, height: height * scale };
   }
 
-  return { plan, fitArtwork, ROW_CAPACITY, AISLE_WIDTH, ART_WIDTH, ART_HEIGHT, GAP };
+  return { plan, fitArtwork, ROW_CAPACITY, AISLE_WIDTH, ART_WIDTH, ART_HEIGHT, GAP, PARTITION_HEIGHT };
 });
