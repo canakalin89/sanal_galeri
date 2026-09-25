@@ -315,7 +315,7 @@
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0xdedfdc);
     scene.fog = new THREE.Fog(0xbbcbd2, 80, 1150);
-    camera = new THREE.PerspectiveCamera(62, container.clientWidth / container.clientHeight, 0.1, Math.max(1600, Math.hypot(plan.width, plan.depth) * 1.25));
+    camera = new THREE.PerspectiveCamera(62, container.clientWidth / container.clientHeight, 0.1, Math.max(3600, Math.hypot(plan.width, plan.depth) * 1.25));
     renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     renderer.setPixelRatio(run.quality.pixelRatio);
     renderer.setSize(container.clientWidth, container.clientHeight);

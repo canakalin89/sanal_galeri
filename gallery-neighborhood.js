@@ -111,9 +111,64 @@
     return routes;
   }
 
+  // Uçak seyir irtifasında, uzaktan geçen bir yolcu uçağı gibi görünür. Gerçek
+  // irtifa (~10 km) kameranın görüş mesafesine sığmadığından sahne ölçekli
+  // kurulur: model küçültülür, hız ve irtifa aynı açısal büyüklüğü ve açısal
+  // hızı verecek şekilde seçilir (≈6 km'deki bir A320 izlenimi).
+  const FLIGHT = {
+    period: 210,          // saniye; iki uçuş arası
+    offset: 14,           // ilk uçuşun başlangıcı
+    halfPath: 3000,       // m; rota ufuktan ufka
+    speed: 55,            // m/s
+    minAltitude: 950, maxAltitude: 1200,
+    maxLateral: 650,      // m; rotanın tam tepeden geçmek zorunda olmaması
+    fadeNear: 2000, fadeFar: 3200, // m; uzak uçak pusta kaybolur
+    scale: 0.34           // gerçek A320 boyutlarından (37.6 m) ≈12.8 m
+  };
+  FLIGHT.duration = FLIGHT.halfPath * 2 / FLIGHT.speed;
+  const CONTRAIL = { gap: 22, decay: 1700, fadeAfter: 45, lobeWidth: 1.0, spread: 0.02, engineSeparation: 4 };
+
   function flightProgress(time) {
-    const progress = (time % 85 - 10) / 18;
+    const progress = (time % FLIGHT.period - FLIGHT.offset) / FLIGHT.duration;
     return progress >= 0 && progress < 1 ? progress : null;
+  }
+
+  function flightIndex(time) {
+    return Math.floor((time - FLIGHT.offset) / FLIGHT.period);
+  }
+
+  // Deterministik sözde rastgele: aynı uçuş her karede aynı rota ve iz kararını verir.
+  function flightRandom(index, salt) {
+    let x = Math.imul((index + 1) * 374761393 + salt * 668265263, 1274126177) >>> 0;
+    x = Math.imul(x ^ (x >>> 13), 1103515245) >>> 0;
+    return ((x ^ (x >>> 16)) >>> 0) / 4294967296;
+  }
+
+  // İz (contrail) yalnızca bazı uçuşlarda oluşur. Yüzey verisinden yüksek irtifa
+  // nemi bilinemediğinden olasılık hava durumuna göre yaklaşık seçilir; kapalı,
+  // yağışlı veya sisli havada uçak zaten görünmediği için iz de çizilmez.
+  function contrailChance(conditions) {
+    if (!conditions) return 0.4;
+    if (conditions.rain || conditions.snow || conditions.thunder || conditions.fog || conditions.cloud > 0.85) return 0;
+    return conditions.cloud > 0.45 ? 0.55 : 0.45;
+  }
+
+  function flightPlan(index, conditions) {
+    const heading = flightRandom(index, 1) * Math.PI * 2;
+    const direction = { x: Math.sin(heading), z: Math.cos(heading) };
+    const lateral = (flightRandom(index, 2) * 2 - 1) * FLIGHT.maxLateral;
+    const altitude = FLIGHT.minAltitude + flightRandom(index, 3) * (FLIGHT.maxAltitude - FLIGHT.minAltitude);
+    const contrail = flightRandom(index, 4) < contrailChance(conditions);
+    // Uçak nemli katmana girdiğinde iz başlar; bazen rotanın ortasına doğru.
+    const contrailStart = contrail ? flightRandom(index, 5) * 0.35 : null;
+    const center = { x: direction.z * lateral, z: -direction.x * lateral };
+    return { index, heading, direction, altitude, contrail, contrailStart,
+      start: { x: center.x - direction.x * FLIGHT.halfPath, z: center.z - direction.z * FLIGHT.halfPath } };
+  }
+
+  function flightPosition(plan, progress) {
+    const distance = progress * FLIGHT.halfPath * 2;
+    return { x: plan.start.x + plan.direction.x * distance, y: plan.altitude, z: plan.start.z + plan.direction.z * distance };
   }
 
   function flightLightState(time, daylight) {
@@ -125,44 +180,178 @@
     return direction > 0 ? progress : 1 - progress;
   }
 
+  function roundSpriteTexture(THREE) {
+    const canvas = document.createElement('canvas'); canvas.width = canvas.height = 32;
+    const ctx = canvas.getContext('2d');
+    const gradient = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+    gradient.addColorStop(0, 'rgba(255,255,255,1)'); gradient.addColorStop(0.45, 'rgba(255,255,255,0.85)'); gradient.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gradient; ctx.fillRect(0, 0, 32, 32);
+    return new THREE.CanvasTexture(canvas);
+  }
+
   function addAirplane(THREE, group) {
     const plane = new THREE.Group();
-    plane.name = 'Cam tavanin ustunden gecen ucak';
-    const body = new THREE.MeshStandardMaterial({ color: 0xe7e9e8, metalness: 0.2, roughness: 0.62, side: THREE.DoubleSide });
-    const trim = new THREE.MeshStandardMaterial({ color: 0x677d8e, metalness: 0.15, roughness: 0.65 });
-    function part(width, height, depth, x, y, z, material) {
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
-      mesh.position.set(x, y, z); plane.add(mesh);
-    }
-    part(0.95, 0.85, 8, 0, 0, 0, body);
-    part(11, 0.16, 1.25, 0, 0, 0.3, body);
-    part(3.8, 0.13, 0.75, 0, 0.15, -3.25, body);
-    part(0.14, 1.25, 1.1, 0, 0.65, -3.3, trim);
-    part(0.75, 0.18, 1.4, 0, -0.08, 2.65, trim);
-    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.46, 1.4, 8), body);
-    nose.rotation.x = Math.PI / 2; nose.position.z = 4.65; plane.add(nose);
-    const lights = new THREE.Group(), bulb = new THREE.SphereGeometry(0.25, 8, 6);
-    const red = new THREE.MeshBasicMaterial({ color: 0xff3030, toneMapped: false });
-    const green = new THREE.MeshBasicMaterial({ color: 0x38ff79, toneMapped: false });
-    const white = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
-    function light(x, y, z, material) {
-      const mesh = new THREE.Mesh(bulb, material);
-      mesh.position.set(x, y, z); lights.add(mesh);
+    plane.name = 'Seyir irtifasında geçen yolcu uçağı';
+    // Uzak nesne: salonun sisi uçağı silmesin, uzaklık solması ayrıca yapılır.
+    const body = new THREE.MeshStandardMaterial({ color: 0xeef1f3, metalness: 0.35, roughness: 0.42, fog: false, transparent: true });
+    const wingPaint = new THREE.MeshStandardMaterial({ color: 0xc7cdd3, metalness: 0.45, roughness: 0.4, fog: false, transparent: true, side: THREE.DoubleSide });
+    const engineCowl = new THREE.MeshStandardMaterial({ color: 0xb9c0c7, metalness: 0.5, roughness: 0.38, fog: false, transparent: true });
+    const tailPaint = new THREE.MeshStandardMaterial({ color: 0x24476f, metalness: 0.2, roughness: 0.5, fog: false, transparent: true, side: THREE.DoubleSide });
+    const model = new THREE.Group();
+    // Gövde: burun yuvarlak, kuyruk yukarı doğru incelen dönel profil (gerçek metre).
+    const profile = [[0, 18.8], [0.75, 18.4], [1.45, 17.5], [1.85, 16.2], [1.98, 14.2], [1.98, -7], [1.86, -10.5], [1.45, -14.2], [0.85, -17.2], [0.25, -18.8]]
+      .map(([r, z]) => new THREE.Vector2(r, z));
+    const fuselageGeometry = new THREE.LatheGeometry(profile, 20);
+    fuselageGeometry.rotateX(Math.PI / 2);
+    model.add(new THREE.Mesh(fuselageGeometry, body));
+    // Düz bir planform, burun +Z ve kalınlık aşağı olacak şekilde çevrilir.
+    function planform(points, thickness, material, y) {
+      const shape = new THREE.Shape(points.map(([x, z]) => new THREE.Vector2(x, z)));
+      const geometry = new THREE.ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false });
+      geometry.rotateX(Math.PI / 2);
+      const mesh = new THREE.Mesh(geometry, material); mesh.position.y = y; model.add(mesh);
       return mesh;
     }
-    light(-5.48, -0.08, 0.3, red);
-    light(5.48, -0.08, 0.3, green);
-    light(0, 0.18, -3.68, white);
-    for (const side of [-1, 1]) light(side * 0.58, -0.34, 2.9, white);
-    const strobes = [-1, 1].map(side => light(side * 5.37, -0.18, 0.3, white));
-    const beacon = light(0, -0.48, 0, red);
-    lights.visible = false; plane.add(lights);
+    // Geriye açılı (~25°), sivrilen alçak kanat ve yatay stabilizeler.
+    planform([[-17.9, -7.6], [-1.9, 3.1], [1.9, 3.1], [17.9, -7.6], [17.9, -9.4], [3.2, -4.4], [-3.2, -4.4], [-17.9, -9.4]], 0.45, wingPaint, -0.9);
+    planform([[-6.2, -17.3], [-1.1, -13.4], [1.1, -13.4], [6.2, -17.3], [6.2, -18.6], [-6.2, -18.6]], 0.25, wingPaint, 0.9);
+    // Dikey kuyruk: yan profil X'e dik düzlemde.
+    const finShape = new THREE.Shape([[-12.2, 1.4], [-17.6, 7.6], [-19.3, 7.6], [-18.7, 1.4]].map(([z, y]) => new THREE.Vector2(z, y)));
+    const finGeometry = new THREE.ExtrudeGeometry(finShape, { depth: 0.35, bevelEnabled: false });
+    finGeometry.rotateY(-Math.PI / 2); finGeometry.translate(0.175, 0, 0);
+    model.add(new THREE.Mesh(finGeometry, tailPaint));
+    // Kanat altı iki motor ve pilonları.
+    const nacelle = new THREE.CylinderGeometry(1.05, 0.85, 4.4, 16); nacelle.rotateX(Math.PI / 2);
+    const pylon = new THREE.BoxGeometry(0.3, 1.1, 2.6);
+    for (const side of [-1, 1]) {
+      const engine = new THREE.Mesh(nacelle, engineCowl); engine.position.set(side * 5.75, -2.05, 2.1); model.add(engine);
+      const strut = new THREE.Mesh(pylon, wingPaint); strut.position.set(side * 5.75, -1.25, 1.2); model.add(strut);
+    }
+    model.scale.setScalar(FLIGHT.scale);
+    plane.add(model);
+    // Seyir ışıkları piksel boyutludur; uzaktan da görünürler (gerçekte de öyle).
+    const sprite = roundSpriteTexture(THREE);
+    function lightPoint(positions, color, size) {
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions.flatMap(p => p.map(v => v * FLIGHT.scale)), 3));
+      const material = new THREE.PointsMaterial({ color, size, map: sprite, sizeAttenuation: false, transparent: true, depthWrite: false, fog: false, toneMapped: false });
+      return new THREE.Points(geometry, material);
+    }
+    const lights = new THREE.Group();
+    lights.add(lightPoint([[-17.9, -0.9, -8.2]], 0xff3a30, 4), lightPoint([[17.9, -0.9, -8.2]], 0x3dff7c, 4), lightPoint([[0, 1.5, -18.9]], 0xffffff, 3));
+    const strobes = [lightPoint([[-17.9, -0.9, -8.6], [17.9, -0.9, -8.6]], 0xffffff, 6)];
+    const beacon = lightPoint([[0, -2.1, 0], [0, 2.1, 1]], 0xff2a20, 5);
+    lights.add(...strobes, beacon);
+    plane.add(lights);
     plane.userData.lights = { group: lights, strobes, beacon };
-    plane.rotation.y = Math.atan2(240, -70);
+    plane.userData.fadeMaterials = [body, wingPaint, engineCowl, tailPaint];
     plane.visible = false;
     group.add(plane);
     group.userData.airplane = plane;
+    group.userData.contrail = addContrail(THREE, group);
     group.userData.flightTime = 0;
+  }
+
+  // İz, uçağın arkasında yatay duran uzun bir şerittir. İki motor izi uçağa yakın
+  // ayrı çizgiler olarak başlar, geride genişleyip tek bir buluta karışır ve söner.
+  function addContrail(THREE, group) {
+    const geometry = new THREE.PlaneGeometry(1, 1, 1, 160);
+    const uniforms = {
+      uLength: { value: 1 }, uAgeLength: { value: 0 }, uFade: { value: 0 }, uDaylight: { value: 1 }, uDusk: { value: 0 },
+      uGap: { value: CONTRAIL.gap }, uDecay: { value: CONTRAIL.decay }, uLobe: { value: CONTRAIL.lobeWidth },
+      uSpread: { value: CONTRAIL.spread }, uSeparation: { value: CONTRAIL.engineSeparation },
+      uFadeNear: { value: FLIGHT.fadeNear }, uFadeFar: { value: FLIGHT.fadeFar + 600 }
+    };
+    const material = new THREE.ShaderMaterial({
+      uniforms, transparent: true, depthWrite: false, side: THREE.DoubleSide, toneMapped: false,
+      vertexShader: `
+        uniform float uLength, uAgeLength, uLobe, uSpread, uSeparation;
+        varying float vDistance; varying float vAcross; varying float vHalfWidth; varying vec3 vWorld;
+        void main(){
+          float d = uv.y * uLength;
+          // Yaş (uçağa uzaklık + uçuş bittikten sonraki süre) arttıkça iz genişler.
+          float halfWidth = uSeparation * 0.5 + uLobe + (d + uAgeLength) * uSpread;
+          vec3 p = vec3((uv.x * 2.0 - 1.0) * halfWidth, 0.0, -d);
+          vDistance = d; vAcross = (uv.x * 2.0 - 1.0) * halfWidth; vHalfWidth = halfWidth;
+          vec4 world = modelMatrix * vec4(p, 1.0); vWorld = world.xyz;
+          gl_Position = projectionMatrix * viewMatrix * world;
+        }`,
+      fragmentShader: `
+        uniform float uLength, uAgeLength, uFade, uDaylight, uDusk, uGap, uDecay, uLobe, uSpread, uSeparation, uFadeNear, uFadeFar;
+        varying float vDistance; varying float vAcross; varying float vHalfWidth; varying vec3 vWorld;
+        void main(){
+          float age = vDistance + uAgeLength;
+          float sigma = uLobe + age * uSpread;
+          float halfGap = uSeparation * 0.5;
+          float left = exp(-pow((vAcross + halfGap) / sigma, 2.0));
+          float right = exp(-pow((vAcross - halfGap) / sigma, 2.0));
+          float profile = min(1.0, left + right);
+          float start = smoothstep(uGap * 0.6, uGap * 1.6, vDistance);
+          float decay = exp(-age / uDecay);
+          float thin = mix(0.95, 0.55, clamp(age / uDecay, 0.0, 1.0));
+          float haze = 1.0 - smoothstep(uFadeNear, uFadeFar, distance(vWorld, cameraPosition));
+          float alpha = profile * start * decay * thin * haze * uFade * mix(0.06, 1.0, uDaylight);
+          if (alpha < 0.004) discard;
+          vec3 color = mix(vec3(0.34, 0.38, 0.46), vec3(0.97, 0.98, 1.0), uDaylight);
+          color = mix(color, vec3(1.0, 0.72, 0.52), uDusk * 0.55);
+          gl_FragColor = vec4(color, alpha);
+        }`
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.name = 'Uçak izi (contrail)';
+    mesh.frustumCulled = false;
+    mesh.renderOrder = -5;
+    mesh.visible = false;
+    group.add(mesh);
+    return { mesh, uniforms, plan: null, head: null, endedAt: null };
+  }
+
+  function updateAirplane(group, dt) {
+    const time = group.userData.flightTime;
+    const plane = group.userData.airplane, contrail = group.userData.contrail;
+    const daylight = group.userData.daylight ?? 1;
+    const progress = flightProgress(time);
+    const index = flightIndex(time);
+    // Uçak göründüğü anda yeni uçuş kurulur (zaman geri sarılsa bile durum tutarlı kalır).
+    if (progress !== null && (!plane.visible || !plane.userData.plan || plane.userData.plan.index !== index)) {
+      plane.userData.plan = flightPlan(index, group.userData.conditions);
+      plane.rotation.y = plane.userData.plan.heading;
+      // Yeni uçuş başlarken önceki iz hâlâ sönüyorsa yerinde bırakılır.
+      if (plane.userData.plan.contrail) {
+        Object.assign(contrail, { plan: plane.userData.plan, head: null, endedAt: null });
+      }
+    }
+    const plan = plane.userData.plan;
+    plane.visible = progress !== null;
+    if (progress !== null) {
+      const position = flightPosition(plan, progress);
+      plane.position.set(position.x, position.y, position.z);
+      const cameraDistance = Math.hypot(position.x, position.y, position.z);
+      const opacity = 1 - Math.min(1, Math.max(0, (cameraDistance - FLIGHT.fadeNear) / (FLIGHT.fadeFar - FLIGHT.fadeNear)));
+      for (const material of plane.userData.fadeMaterials) material.opacity = opacity;
+      const flightLights = flightLightState(time, daylight);
+      plane.userData.lights.group.visible = flightLights.night && opacity > 0.05;
+      plane.userData.lights.strobes.forEach(strobe => { strobe.visible = flightLights.strobe; });
+      plane.userData.lights.beacon.visible = flightLights.beacon;
+    }
+    // İz: başlangıç noktası sabit, uç uçağı izler; uçuş bitince yerinde söner.
+    const trail = contrail.plan;
+    if (!trail) { contrail.mesh.visible = false; return; }
+    const sameFlight = progress !== null && trail.index === index;
+    if (sameFlight && progress >= trail.contrailStart) contrail.head = flightPosition(trail, progress);
+    else if (!sameFlight && contrail.head && contrail.endedAt === null) contrail.endedAt = time;
+    if (!contrail.head) { contrail.mesh.visible = false; return; }
+    const tail = flightPosition(trail, trail.contrailStart);
+    const length = Math.hypot(contrail.head.x - tail.x, contrail.head.z - tail.z);
+    const afterEnd = contrail.endedAt === null ? 0 : time - contrail.endedAt;
+    const fade = Math.max(0, 1 - afterEnd / CONTRAIL.fadeAfter);
+    if (fade <= 0 || length < 1) { contrail.mesh.visible = false; if (fade <= 0) contrail.plan = null; return; }
+    contrail.mesh.visible = true;
+    contrail.mesh.position.set(contrail.head.x, trail.altitude - 0.7, contrail.head.z);
+    contrail.mesh.rotation.y = trail.heading;
+    const u = contrail.uniforms;
+    u.uLength.value = length; u.uAgeLength.value = afterEnd * FLIGHT.speed; u.uFade.value = fade;
+    u.uDaylight.value = daylight; u.uDusk.value = group.userData.dusk ?? 0;
   }
 
   function addTraffic(THREE, group, roads, plan, mobile) {
@@ -230,14 +419,7 @@
 
   function tick(group, dt) {
     group.userData.flightTime += dt;
-    const flight = flightProgress(group.userData.flightTime);
-    const plane = group.userData.airplane;
-    plane.visible = flight !== null;
-    if (flight !== null) plane.position.set(-120 + 240 * flight, 48, 35 - 70 * flight);
-    const flightLights = flightLightState(group.userData.flightTime, group.userData.daylight ?? 1);
-    plane.userData.lights.group.visible = flightLights.night;
-    plane.userData.lights.strobes.forEach(strobe => { strobe.visible = flightLights.strobe; });
-    plane.userData.lights.beacon.visible = flightLights.beacon;
+    updateAirplane(group, dt);
     const traffic = group.userData.traffic;
     if (!traffic) return;
     traffic.time += dt;
@@ -457,10 +639,12 @@
   function update(THREE, group, cycle, sunPosition, weather, report) {
     group.userData.sky.update(cycle,sunPosition,weather,report);
     group.userData.daylight = cycle.daylight;
+    group.userData.dusk = cycle.dusk;
+    group.userData.conditions = weather || null;
     for (const item of group.userData.traffic?.vehicles || []) item.lights.visible = cycle.daylight < 0.35;
     for(const facade of group.userData.facades) facade.emissiveIntensity=(1-cycle.daylight)*0.8;
     for(const surface of group.userData.weatherSurfaces) surface.roughness=weather?.rain ? 0.42 : 0.96;
   }
 
-  return { SITE, selectFeatures, buildingHeight, trafficRoutes, trafficPhase, flightProgress, flightLightState, create, populate, update, tick };
+  return { SITE, selectFeatures, buildingHeight, trafficRoutes, trafficPhase, flightProgress, flightIndex, flightPlan, flightPosition, contrailChance, flightLightState, FLIGHT, CONTRAIL, create, populate, update, tick };
 });
