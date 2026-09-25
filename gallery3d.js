@@ -152,6 +152,12 @@
       if (!current()) { disposeObjects([model]); return; }
       addModelInstances(room, model, plan.decor.plants, 'plant', 1.35, 'y');
     }).catch(() => {});
+    // Gökyüzünden geçen uçak: açık kaynak A320. Hareket azaltma açıksa uçak hiç
+    // gösterilmediğinden model de indirilmez.
+    if (run.neighborhood && !run.neighborhood.userData.reducedMotion) loadModel('/vendor/models/airliner.glb', run).then(model => {
+      if (!current() || !run.neighborhood) { disposeObjects([model]); return; }
+      GalleryNeighborhood.setAirplaneModel(THREE, run.neighborhood, model);
+    }).catch(() => {});
     loadModel('/vendor/models/chandelier.glb', run).then(model => {
       if (!current()) { disposeObjects([model]); return; }
       addModelInstances(room, model, plan.decor.chandeliers, 'chandelier', 0.95, 'y', size => plan.height - size.y - 0.08);
@@ -315,7 +321,7 @@
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0xdedfdc);
     scene.fog = new THREE.Fog(0xbbcbd2, 80, 1150);
-    camera = new THREE.PerspectiveCamera(62, container.clientWidth / container.clientHeight, 0.1, Math.max(3600, Math.hypot(plan.width, plan.depth) * 1.25));
+    camera = new THREE.PerspectiveCamera(62, container.clientWidth / container.clientHeight, 0.1, Math.max(7000, Math.hypot(plan.width, plan.depth) * 1.25));
     renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     renderer.setPixelRatio(run.quality.pixelRatio);
     renderer.setSize(container.clientWidth, container.clientHeight);

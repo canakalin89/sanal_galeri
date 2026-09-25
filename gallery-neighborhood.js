@@ -111,22 +111,23 @@
     return routes;
   }
 
-  // Uçak seyir irtifasında, uzaktan geçen bir yolcu uçağı gibi görünür. Gerçek
-  // irtifa (~10 km) kameranın görüş mesafesine sığmadığından sahne ölçekli
-  // kurulur: model küçültülür, hız ve irtifa aynı açısal büyüklüğü ve açısal
-  // hızı verecek şekilde seçilir (≈6 km'deki bir A320 izlenimi).
+  // Uçak seyir irtifasında (~10 km) geçen bir yolcu uçağı gibi görünür. Bu
+  // mesafe kameranın derinlik hassasiyetine sığmadığından sahne ölçekli kurulur:
+  // model küçültülür, irtifa ve hız gerçek seyirdeki açısal büyüklüğü (~0,3°)
+  // ve açısal hızı (~1,4°/sn) verecek şekilde seçilir.
   const FLIGHT = {
-    period: 210,          // saniye; iki uçuş arası
+    period: 420,          // saniye; iki uçuş arası
     offset: 14,           // ilk uçuşun başlangıcı
-    halfPath: 3000,       // m; rota ufuktan ufka
-    speed: 55,            // m/s
-    minAltitude: 950, maxAltitude: 1200,
-    maxLateral: 650,      // m; rotanın tam tepeden geçmek zorunda olmaması
-    fadeNear: 2000, fadeFar: 3200, // m; uzak uçak pusta kaybolur
-    scale: 0.34           // gerçek A320 boyutlarından (37.6 m) ≈12.8 m
+    startProgress: 0.32,  // salon açılınca ilk uçak göğe girmiş olsun
+    halfPath: 6500,       // m; rota ufuktan ufka
+    speed: 48,            // m/s
+    minAltitude: 1900, maxAltitude: 2300,
+    maxLateral: 1100,     // m; rotanın tam tepeden geçmek zorunda olmaması
+    fadeNear: 3600, fadeFar: 6400, // m; uzak uçak pusta kaybolur
+    scale: 0.27           // gerçek A320 boyutlarından (37.6 m) ≈10 m
   };
   FLIGHT.duration = FLIGHT.halfPath * 2 / FLIGHT.speed;
-  const CONTRAIL = { gap: 22, decay: 1700, fadeAfter: 45, lobeWidth: 1.0, spread: 0.02, engineSeparation: 4 };
+  const CONTRAIL = { gap: 20, decay: 3200, fadeAfter: 60, lobeWidth: 1.8, spread: 0.02, engineSeparation: 3.1 };
 
   function flightProgress(time) {
     const progress = (time % FLIGHT.period - FLIGHT.offset) / FLIGHT.duration;
@@ -193,10 +194,10 @@
     const plane = new THREE.Group();
     plane.name = 'Seyir irtifasında geçen yolcu uçağı';
     // Uzak nesne: salonun sisi uçağı silmesin, uzaklık solması ayrıca yapılır.
-    const body = new THREE.MeshStandardMaterial({ color: 0xeef1f3, metalness: 0.35, roughness: 0.42, fog: false, transparent: true });
-    const wingPaint = new THREE.MeshStandardMaterial({ color: 0xc7cdd3, metalness: 0.45, roughness: 0.4, fog: false, transparent: true, side: THREE.DoubleSide });
-    const engineCowl = new THREE.MeshStandardMaterial({ color: 0xb9c0c7, metalness: 0.5, roughness: 0.38, fog: false, transparent: true });
-    const tailPaint = new THREE.MeshStandardMaterial({ color: 0x24476f, metalness: 0.2, roughness: 0.5, fog: false, transparent: true, side: THREE.DoubleSide });
+    const body = new THREE.MeshStandardMaterial({ color: 0xeef1f3, metalness: 0.35, roughness: 0.42, fog: false });
+    const wingPaint = new THREE.MeshStandardMaterial({ color: 0xc7cdd3, metalness: 0.45, roughness: 0.4, fog: false, side: THREE.DoubleSide });
+    const engineCowl = new THREE.MeshStandardMaterial({ color: 0xb9c0c7, metalness: 0.5, roughness: 0.38, fog: false });
+    const tailPaint = new THREE.MeshStandardMaterial({ color: 0x24476f, metalness: 0.2, roughness: 0.5, fog: false, side: THREE.DoubleSide });
     const model = new THREE.Group();
     // Gövde: burun yuvarlak, kuyruk yukarı doğru incelen dönel profil (gerçek metre).
     const profile = [[0, 18.8], [0.75, 18.4], [1.45, 17.5], [1.85, 16.2], [1.98, 14.2], [1.98, -7], [1.86, -10.5], [1.45, -14.2], [0.85, -17.2], [0.25, -18.8]]
@@ -229,6 +230,8 @@
     }
     model.scale.setScalar(FLIGHT.scale);
     plane.add(model);
+    // Bu sade model yalnızca yedektir; gerçek A320 modeli yüklenince değiştirilir.
+    plane.userData.model = model;
     // Seyir ışıkları piksel boyutludur; uzaktan da görünürler (gerçekte de öyle).
     const sprite = roundSpriteTexture(THREE);
     function lightPoint(positions, color, size) {
@@ -244,12 +247,61 @@
     lights.add(...strobes, beacon);
     plane.add(lights);
     plane.userData.lights = { group: lights, strobes, beacon };
-    plane.userData.fadeMaterials = [body, wingPaint, engineCowl, tailPaint];
+    plane.userData.fadeMaterials = prepareFadeMaterials([body, wingPaint, engineCowl, tailPaint]);
     plane.visible = false;
     group.add(plane);
     group.userData.airplane = plane;
     group.userData.contrail = addContrail(THREE, group);
-    group.userData.flightTime = 0;
+    group.userData.flightTime = FLIGHT.offset + FLIGHT.duration * FLIGHT.startProgress;
+  }
+
+  function prepareFadeMaterials(materials) {
+    for (const material of materials) {
+      material.fog = false;
+      material.userData.baseOpacity = material.opacity;
+      material.userData.baseTransparent = material.transparent;
+      material.needsUpdate = true;
+    }
+    return materials;
+  }
+
+  function setFade(materials, opacity) {
+    for (const material of materials) {
+      // Tam görünürken opak çizilir; yalnızca puslanırken saydamlığa geçilir.
+      const transparent = material.userData.baseTransparent || opacity < 0.999;
+      if (material.transparent !== transparent) { material.transparent = transparent; material.needsUpdate = true; }
+      material.opacity = material.userData.baseOpacity * opacity;
+    }
+  }
+
+  // Açık kaynak A320 modeli (FlightGear, GPLv2) yüklendiğinde yedek modelin yerine konur.
+  function setAirplaneModel(THREE, group, source) {
+    const plane = group?.userData.airplane;
+    if (!plane) return false;
+    const model = new THREE.Group();
+    source.rotation.set(0, -Math.PI / 2, 0); // kaynak modelde burun +X yönünde
+    model.add(source);
+    const center = new THREE.Box3().setFromObject(model).getCenter(new THREE.Vector3());
+    source.position.sub(center);
+    const materials = new Set();
+    model.traverse(node => {
+      if (!node.isMesh) return;
+      node.castShadow = node.receiveShadow = false;
+      for (const material of Array.isArray(node.material) ? node.material : [node.material]) materials.add(material);
+    });
+    model.scale.setScalar(FLIGHT.scale);
+    const previous = plane.userData.model;
+    if (previous) {
+      plane.remove(previous);
+      previous.traverse(node => {
+        node.geometry?.dispose();
+        for (const material of Array.isArray(node.material) ? node.material : [node.material]) material?.dispose();
+      });
+    }
+    plane.add(model);
+    plane.userData.model = model;
+    plane.userData.fadeMaterials = prepareFadeMaterials([...materials]);
+    return true;
   }
 
   // İz, uçağın arkasında yatay duran uzun bir şerittir. İki motor izi uçağa yakın
@@ -328,7 +380,7 @@
       plane.position.set(position.x, position.y, position.z);
       const cameraDistance = Math.hypot(position.x, position.y, position.z);
       const opacity = 1 - Math.min(1, Math.max(0, (cameraDistance - FLIGHT.fadeNear) / (FLIGHT.fadeFar - FLIGHT.fadeNear)));
-      for (const material of plane.userData.fadeMaterials) material.opacity = opacity;
+      setFade(plane.userData.fadeMaterials, opacity);
       const flightLights = flightLightState(time, daylight);
       plane.userData.lights.group.visible = flightLights.night && opacity > 0.05;
       plane.userData.lights.strobes.forEach(strobe => { strobe.visible = flightLights.strobe; });
@@ -347,7 +399,7 @@
     const fade = Math.max(0, 1 - afterEnd / CONTRAIL.fadeAfter);
     if (fade <= 0 || length < 1) { contrail.mesh.visible = false; if (fade <= 0) contrail.plan = null; return; }
     contrail.mesh.visible = true;
-    contrail.mesh.position.set(contrail.head.x, trail.altitude - 0.7, contrail.head.z);
+    contrail.mesh.position.set(contrail.head.x, trail.altitude - 0.4, contrail.head.z);
     contrail.mesh.rotation.y = trail.heading;
     const u = contrail.uniforms;
     u.uLength.value = length; u.uAgeLength.value = afterEnd * FLIGHT.speed; u.uFade.value = fade;
@@ -646,5 +698,5 @@
     for(const surface of group.userData.weatherSurfaces) surface.roughness=weather?.rain ? 0.42 : 0.96;
   }
 
-  return { SITE, selectFeatures, buildingHeight, trafficRoutes, trafficPhase, flightProgress, flightIndex, flightPlan, flightPosition, contrailChance, flightLightState, FLIGHT, CONTRAIL, create, populate, update, tick };
+  return { SITE, selectFeatures, buildingHeight, trafficRoutes, trafficPhase, flightProgress, flightIndex, flightPlan, flightPosition, contrailChance, flightLightState, FLIGHT, CONTRAIL, setAirplaneModel, create, populate, update, tick };
 });

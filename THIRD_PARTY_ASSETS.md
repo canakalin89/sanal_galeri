@@ -10,6 +10,17 @@ dosyalarının içindeki üretici, kaynak ve lisans metadata'sı korunmuştur.
 - `vendor/models/chandelier.glb` — **Chandelier Black**, Pivoga. Kaynak:
   https://sketchfab.com/3d-models/chandelier-black-c66c187d0ed44d759d2b6564fbc83a9c
   Lisans: CC BY 4.0 — https://creativecommons.org/licenses/by/4.0/
+- `vendor/models/airliner.glb` — **Airbus A320**, FlightGear A320-family projesi
+  (yazarlar: fredb, curt, mfranz, Ryan Miller, Durk Talsma, janodesbois, F-JJTH,
+  James Turner ve diğerleri). Kaynak: https://github.com/FGMEMBERS/A320-family —
+  glTF 2.0 dönüşümü: https://github.com/Ysurac/FlightAirMap-3dmodels
+  (`a320/glTF2/A320.glb`, commit `0906d9b`).
+  Lisans: **GNU GPL v2** — tam metin `vendor/models/airliner.LICENSE.txt`.
+  Değişiklik: yalnızca boyut için optimize edildi (birleştirme, sadeleştirme,
+  Draco geometri sıkıştırma, WebP doku), içerik değiştirilmedi:
+  `npx @gltf-transform/cli optimize A320.glb airliner.glb --compress draco --texture-compress webp --texture-size 1024`.
+  Model gökyüzünde uzaktan geçen uçak olarak kullanılır; uygulama kodunun
+  lisansı değişmez, GPLv2 yalnızca bu model dosyası için geçerlidir.
 
 Üçüncü taraf modeller çalışma anında salon ölçeğine göre boyutlandırılır ve
 yerleştirilir. Model yüklenemezse uygulamanın kendi sade, prosedürel
