@@ -20,7 +20,7 @@ for (const directory of ['loaders', 'utils', 'draco']) {
   fs.cpSync(path.join(root, 'vendor', directory), path.join(output, 'vendor', directory), { recursive: true });
 }
 fs.mkdirSync(path.join(output, 'vendor', 'models'));
-for (const model of ['plant.glb', 'chandelier.glb']) {
+for (const model of ['plant.glb', 'chandelier.glb', 'airliner.glb', 'airliner.LICENSE.txt']) {
   fs.copyFileSync(path.join(root, 'vendor', 'models', model), path.join(output, 'vendor', 'models', model));
 }
 fs.writeFileSync(path.join(output, 'images-list.js'), 'const SCHOOL_NAME = ' + JSON.stringify(config.schoolName) + ';\n');

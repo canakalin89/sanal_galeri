@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { SITE, selectFeatures, buildingHeight, trafficRoutes, trafficPhase, flightProgress, flightLightState } = require('../gallery-neighborhood');
+const { SITE, selectFeatures, buildingHeight, trafficRoutes, trafficPhase, flightProgress, flightIndex, flightPlan, flightPosition, contrailChance, flightLightState, FLIGHT } = require('../gallery-neighborhood');
 const data = require('../assets/environment/kapakli.json');
 const { plan } = require('../gallery-layout');
 
@@ -55,13 +55,43 @@ test('araclar yol bitiminde geri sekmez; gorus disinda yeni tur baslar', () => {
   assert.equal(trafficPhase(100, 1, 100, 0, -1), 1);
 });
 
-test('ucak kisa gecisler yapar ve gecisler arasinda gorunmez', () => {
-  assert.equal(flightProgress(9), null);
-  assert.equal(flightProgress(10), 0);
-  assert.equal(flightProgress(19), 0.5);
-  assert.equal(flightProgress(28), null);
-  assert.equal(flightProgress(95), 0);
+test('ucak arada bir gecer ve gecisler arasinda gorunmez', () => {
+  const { period, offset, duration } = FLIGHT;
+  assert.equal(flightProgress(offset - 1), null);
+  assert.equal(flightProgress(offset), 0);
+  assert.equal(flightProgress(offset + duration / 2), 0.5);
+  assert.equal(flightProgress(offset + duration + 1), null);
+  assert.equal(flightProgress(period + offset), 0);
+  assert.equal(flightIndex(offset + 5), 0);
+  assert.equal(flightIndex(period + offset + 5), 1);
   assert.deepEqual(flightLightState(0.05, 0.2), { night: true, strobe: true, beacon: true });
   assert.deepEqual(flightLightState(0.3, 0.2), { night: true, strobe: false, beacon: false });
   assert.equal(flightLightState(0.05, 1).night, false);
+});
+
+test('ucak seyir irtifasinda, gercekci hizla ve ufuktan ufka ucar', () => {
+  assert.ok(FLIGHT.minAltitude >= 900, 'dron gibi alcaktan gecmemeli');
+  // Tepeden geciste acisal hiz gercek bir yolcu ucagina yakin kalmali (derece/saniye).
+  const angular = FLIGHT.speed / FLIGHT.maxAltitude * 180 / Math.PI;
+  assert.ok(angular > 1 && angular < 4, 'acisal hiz: ' + angular);
+  for (let index = 0; index < 50; index++) {
+    const plan = flightPlan(index, null);
+    const start = flightPosition(plan, 0), end = flightPosition(plan, 1), middle = flightPosition(plan, 0.5);
+    assert.ok(Math.hypot(start.x, start.z) > 2500 && Math.hypot(end.x, end.z) > 2500, 'ufuktan gelip ufka gitmeli');
+    assert.ok(Math.hypot(middle.x, middle.z) <= FLIGHT.maxLateral + 1e-6);
+    assert.ok(plan.altitude >= FLIGHT.minAltitude && plan.altitude <= FLIGHT.maxAltitude);
+    assert.deepEqual(flightPlan(index, null), plan, 'ayni ucus her karede ayni rotayi kullanmali');
+  }
+});
+
+test('ucak izi yalnizca bazi ucuslarda ve uygun havada olusur', () => {
+  const clear = { cloud: 0.1, rain: false, snow: false, thunder: false, fog: false };
+  const withTrail = Array.from({ length: 200 }, (_, index) => flightPlan(index, clear).contrail).filter(Boolean).length;
+  assert.ok(withTrail > 50 && withTrail < 150, 'arasira iz: ' + withTrail + '/200');
+  for (const bad of [{ ...clear, rain: true }, { ...clear, fog: true }, { ...clear, thunder: true }, { ...clear, cloud: 0.95 }]) {
+    assert.equal(contrailChance(bad), 0);
+    assert.ok(Array.from({ length: 50 }, (_, index) => flightPlan(index, bad)).every(plan => !plan.contrail && plan.contrailStart === null));
+  }
+  const plan = Array.from({ length: 50 }, (_, index) => flightPlan(index, clear)).find(item => item.contrail);
+  assert.ok(plan.contrailStart >= 0 && plan.contrailStart < 0.35);
 });
