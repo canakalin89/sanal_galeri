@@ -176,11 +176,6 @@
     return { night: daylight < 0.35, strobe: time % 1.2 < 0.12, beacon: time % 0.9 < 0.18 };
   }
 
-  function trafficPhase(time, speed, length, phase, direction) {
-    const progress = (time * speed / length + phase) % 1;
-    return direction > 0 ? progress : 1 - progress;
-  }
-
   function roundSpriteTexture(THREE) {
     const canvas = document.createElement('canvas'); canvas.width = canvas.height = 32;
     const ctx = canvas.getContext('2d');
@@ -358,14 +353,14 @@
     return { mesh, uniforms, plan: null, head: null, endedAt: null };
   }
 
-  function updateAirplane(group, dt) {
+  function updateAirplane(group) {
     const time = group.userData.flightTime;
     const plane = group.userData.airplane, contrail = group.userData.contrail;
     const daylight = group.userData.daylight ?? 1;
     const progress = flightProgress(time);
     const index = flightIndex(time);
-    // Uçak göründüğü anda yeni uçuş kurulur (zaman geri sarılsa bile durum tutarlı kalır).
-    if (progress !== null && (!plane.visible || !plane.userData.plan || plane.userData.plan.index !== index)) {
+    // Görünürlük değişse de aynı uçuşun rotası ve iz kararı korunur.
+    if (progress !== null && (!plane.userData.plan || plane.userData.plan.index !== index)) {
       plane.userData.plan = flightPlan(index, group.userData.conditions);
       plane.rotation.y = plane.userData.plan.heading;
       // Yeni uçuş başlarken önceki iz hâlâ sönüyorsa yerinde bırakılır.
@@ -374,7 +369,9 @@
       }
     }
     const plan = plane.userData.plan;
-    plane.visible = progress !== null;
+    // shortcut: bulutlar gökyüzü yüzeyindedir; yerel bulut örtmesi için hacimsel bulut gerekir.
+    const clearSky = contrailChance(group.userData.conditions) > 0;
+    plane.visible = progress !== null && clearSky;
     if (progress !== null) {
       const position = flightPosition(plan, progress);
       plane.position.set(position.x, position.y, position.z);
@@ -382,7 +379,7 @@
       const opacity = 1 - Math.min(1, Math.max(0, (cameraDistance - FLIGHT.fadeNear) / (FLIGHT.fadeFar - FLIGHT.fadeNear)));
       setFade(plane.userData.fadeMaterials, opacity);
       const flightLights = flightLightState(time, daylight);
-      plane.userData.lights.group.visible = flightLights.night && opacity > 0.05;
+      plane.userData.lights.group.visible = clearSky && flightLights.night && opacity > 0.05;
       plane.userData.lights.strobes.forEach(strobe => { strobe.visible = flightLights.strobe; });
       plane.userData.lights.beacon.visible = flightLights.beacon;
     }
@@ -398,7 +395,7 @@
     const afterEnd = contrail.endedAt === null ? 0 : time - contrail.endedAt;
     const fade = Math.max(0, 1 - afterEnd / CONTRAIL.fadeAfter);
     if (fade <= 0 || length < 1) { contrail.mesh.visible = false; if (fade <= 0) contrail.plan = null; return; }
-    contrail.mesh.visible = true;
+    contrail.mesh.visible = clearSky;
     contrail.mesh.position.set(contrail.head.x, trail.altitude - 0.4, contrail.head.z);
     contrail.mesh.rotation.y = trail.heading;
     const u = contrail.uniforms;
@@ -409,6 +406,52 @@
   function addTraffic(THREE, group, roads, plan, mobile) {
     const routes = trafficRoutes(roads, plan, mobile);
     if (!routes.length) return;
+    const nodes = new Map();
+    for (const route of routes) {
+      route.curve = new THREE.CurvePath();
+      for (let i = 0; i < route.points.length; i++) {
+        const p = route.points[i], key = p.join(',');
+        if (!nodes.has(key)) nodes.set(key, { point: p, next: new Set(), bend: false });
+        const node = nodes.get(key);
+        for (const j of [i - 1, i + 1]) if (route.points[j]) node.next.add(route.points[j].join(','));
+        if (!i) continue;
+        const a = route.points[i - 1];
+        route.curve.add(new THREE.LineCurve3(new THREE.Vector3(a[0], 0, a[1]), new THREE.Vector3(p[0], 0, p[1])));
+        const b = route.points[i + 1];
+        if (b && ((p[0] - a[0]) * (b[0] - p[0]) + (p[1] - a[1]) * (b[1] - p[1])) /
+          Math.hypot(p[0] - a[0], p[1] - a[1]) / Math.hypot(b[0] - p[0], b[1] - p[1]) < 0.85) node.bend = true;
+      }
+      route.length = route.curve.getLength();
+    }
+    // Yakın kavşaklar tek geçiş alanıdır; karşılıklı kilitlenme oluşmaz.
+    const radius = 14;
+    const zones = [...nodes.values()].filter(node => node.next.size > 2 || node.bend)
+      .map(node => ({ points: [node.point], owner: null }));
+    for (let i = 0; i < zones.length; i++) for (let j = i + 1; j < zones.length; j++) {
+      if (zones[i].points.some(a => zones[j].points.some(b => Math.hypot(a[0] - b[0], a[1] - b[1]) < radius * 2))) {
+        zones[i].points.push(...zones[j].points); zones.splice(j, 1); i = -1; break;
+      }
+    }
+    for (const route of routes) {
+      route.zones = [];
+      for (const zone of zones) {
+        let distance = 0, entry = Infinity, exit = -Infinity;
+        for (let i = 1; i < route.points.length; i++) {
+          const a = route.points[i - 1], b = route.points[i];
+          const length = Math.hypot(b[0] - a[0], b[1] - a[1]), x = (b[0] - a[0]) / length, z = (b[1] - a[1]) / length;
+          for (const p of zone.points) {
+            const along = (p[0] - a[0]) * x + (p[1] - a[1]) * z;
+            const across = (p[0] - a[0]) * z - (p[1] - a[1]) * x;
+            if (Math.abs(across) > radius) continue;
+            const span = Math.sqrt(radius * radius - across * across);
+            const start = Math.max(0, along - span), end = Math.min(length, along + span);
+            if (start <= end) { entry = Math.min(entry, distance + start); exit = Math.max(exit, distance + end); }
+          }
+          distance += length;
+        }
+        if (entry < exit) route.zones.push({ zone, entry, exit });
+      }
+    }
     const kinds = mobile ? ['minibus', 'truck', 'car', 'minibus', 'lorry', 'car', 'minibus', 'truck'] :
       ['minibus', 'truck', 'car', 'lorry', 'minibus', 'car', 'truck', 'minibus', 'lorry', 'car', 'minibus', 'truck', 'car', 'lorry', 'minibus', 'truck'];
     const glass = new THREE.MeshStandardMaterial({ color: 0x7696a2, metalness: 0.08, roughness: 0.2 });
@@ -419,12 +462,7 @@
     const lightGeometry = new THREE.BoxGeometry(0.22, 0.18, 0.08);
     const vehicles = kinds.map((kind, index) => {
       const route = routes[index % routes.length];
-      const curve = new THREE.CurvePath();
-      for (let i = 1; i < route.points.length; i++) {
-        const [ax, az] = route.points[i - 1], [bx, bz] = route.points[i];
-        curve.add(new THREE.LineCurve3(new THREE.Vector3(ax, 0, az), new THREE.Vector3(bx, 0, bz)));
-      }
-      const length = curve.getLength();
+      const { curve, length } = route;
       const vehicle = new THREE.Group();
       const cargo = kind === 'lorry', truck = kind === 'truck', minibus = kind === 'minibus';
       const bodyLength = cargo ? 8.8 : truck ? 5.8 : minibus ? 5.2 : 3.8;
@@ -464,28 +502,96 @@
       vehicle.add(lights);
       vehicle.visible = false;
       group.add(vehicle);
-      return { vehicle, lights, curve, length, direction: index % 2 ? -1 : 1, speed: kind === 'car' ? 9 : kind === 'minibus' ? 7 : 5.5, phase: (index + 0.4) / kinds.length };
+      const direction = index % 2 ? -1 : 1;
+      return { vehicle, lights, curve, length, direction, bodyLength, bodyWidth: bodyWidth + 0.2, spawned: false,
+        speed: kind === 'car' ? 9 : kind === 'minibus' ? 7 : 5.5, velocity: 0,
+        distance: (index + 0.4) / kinds.length * length,
+        zones: route.zones.map(({ zone, entry, exit }) => direction > 0 ? { zone, entry, exit } : { zone, entry: length - exit, exit: length - entry }) };
     });
-    group.userData.traffic = { vehicles, time: 0 };
+    const placed = [];
+    for (const item of vehicles) {
+      for (let attempt = 0; attempt < Math.ceil(item.length / 12); attempt++) {
+        item.pose = trafficPose(item, item.distance);
+        const occupied = item.zones.filter(area => item.distance >= area.entry && item.distance <= area.exit);
+        if (occupied.every(area => !area.zone.owner) && !placed.some(other => trafficOverlap(item, item.pose, other, other.pose, 3))) {
+          occupied.forEach(area => { area.zone.owner = item; });
+          item.spawned = true; placed.push(item); break;
+        }
+        item.distance = (item.distance + 12) % item.length;
+      }
+      if (!item.spawned) { item.distance = 0; item.pose = trafficPose(item, 0); }
+      placeVehicle(item);
+    }
+    group.userData.traffic = { vehicles, zones };
+  }
+
+  function trafficPose(item, distance) {
+    const t = item.direction > 0 ? distance / item.length : 1 - distance / item.length;
+    const point = item.curve.getPoint(t), look = Math.min(0.03, 2 / item.length);
+    const tangent = item.curve.getPoint(Math.min(1, t + look))
+      .sub(item.curve.getPoint(Math.max(0, t - look))).normalize().multiplyScalar(item.direction);
+    return { x: point.x + tangent.z * 1.3, z: point.z - tangent.x * 1.3, dx: tangent.x, dz: tangent.z };
+  }
+
+  function trafficOverlap(a, p, b, q, gap = 0) {
+    const x = q.x - p.x, z = q.z - p.z;
+    if (Math.hypot(x, z) > (a.bodyLength + b.bodyLength) / 2 + gap + 3) return false;
+    for (const [dx, dz] of [[p.dx, p.dz], [p.dz, -p.dx], [q.dx, q.dz], [q.dz, -q.dx]]) {
+      const extent = (item, pose) => Math.abs(dx * pose.dx + dz * pose.dz) * (item.bodyLength + gap) / 2 +
+        Math.abs(dx * pose.dz - dz * pose.dx) * item.bodyWidth / 2;
+      if (Math.abs(x * dx + z * dz) >= extent(a, p) + extent(b, q) + 0.02) return false;
+    }
+    return true;
+  }
+
+  function placeVehicle(item) {
+    const p = item.pose;
+    item.vehicle.position.set(p.x, GROUND_Y + 0.04, p.z);
+    item.vehicle.rotation.y = Math.atan2(p.dx, p.dz);
+    item.vehicle.visible = item.spawned && Math.hypot(p.x, p.z) < 260;
+  }
+
+  function stepTraffic(traffic, dt) {
+    for (const zone of traffic.zones) if (zone.owner && !zone.owner.zones.some(area =>
+      area.zone === zone && zone.owner.distance >= area.entry - (zone.owner.speed * 1.2 + 3) && zone.owner.distance <= area.exit)) zone.owner = null;
+    for (const item of traffic.vehicles) if (!item.spawned &&
+      item.zones.every(area => area.entry > 0 || !area.zone.owner) &&
+      !traffic.vehicles.some(other => other.spawned && trafficOverlap(item, item.pose, other, other.pose, 3))) item.spawned = true;
+    const vehicles = traffic.vehicles.filter(item => item.spawned);
+    const requests = vehicles.map(item => ({ item, areas: item.zones.filter(area =>
+      area.exit >= item.distance && area.entry - item.distance < item.speed * 1.2 + 3) })).filter(request => request.areas.length);
+    requests.sort((a, b) => Math.min(...a.areas.map(area => area.entry - a.item.distance)) - Math.min(...b.areas.map(area => area.entry - b.item.distance)));
+    for (const { item, areas } of requests) if (areas.every(area => !area.zone.owner || area.zone.owner === item))
+      areas.forEach(area => { area.zone.owner = item; });
+    for (const item of vehicles) {
+      let available = Infinity;
+      for (const area of item.zones) if (area.exit >= item.distance && area.zone.owner !== item)
+        available = Math.min(available, Math.max(0, area.entry - item.distance));
+      for (const other of vehicles) {
+        if (other === item) continue;
+        const x = other.pose.x - item.pose.x, z = other.pose.z - item.pose.z;
+        const ahead = x * item.pose.dx + z * item.pose.dz;
+        const across = Math.abs(x * item.pose.dz - z * item.pose.dx);
+        if (ahead > 0 && across < (item.bodyWidth + other.bodyWidth) / 2 + 0.1 &&
+          item.pose.dx * other.pose.dx + item.pose.dz * other.pose.dz > 0.7)
+          available = Math.min(available, Math.max(0, ahead - (item.bodyLength + other.bodyLength) / 2 - 3));
+      }
+      item.velocity = Math.min(item.speed, item.velocity + 1.8 * dt, available / 1.2);
+      const distance = (item.distance + item.velocity * dt) % item.length;
+      const pose = trafficPose(item, distance);
+      if (vehicles.some(other => other !== item && trafficOverlap(item, pose, other, other.pose))) {
+        item.velocity = 0; continue;
+      }
+      item.distance = distance; item.pose = pose; placeVehicle(item);
+    }
   }
 
   function tick(group, dt) {
     group.userData.flightTime += dt;
-    updateAirplane(group, dt);
+    updateAirplane(group);
     const traffic = group.userData.traffic;
     if (!traffic) return;
-    traffic.time += dt;
-    for (const item of traffic.vehicles) {
-      const t = trafficPhase(traffic.time, item.speed, item.length, item.phase, item.direction);
-      const point = item.curve.getPoint(t);
-      const look = Math.min(0.03, 2 / item.length);
-      const tangent = item.curve.getPoint(Math.min(1, t + look))
-        .sub(item.curve.getPoint(Math.max(0, t - look))).normalize().multiplyScalar(item.direction);
-      const lane = 1.2;
-      item.vehicle.position.set(point.x + tangent.z * lane, GROUND_Y + 0.04, point.z - tangent.x * lane);
-      item.vehicle.rotation.y = Math.atan2(tangent.x, tangent.z);
-      item.vehicle.visible = Math.hypot(point.x, point.z) < 260;
-    }
+    for (let remaining = dt; remaining > 1e-8; remaining -= 0.05) stepTraffic(traffic, Math.min(0.05, remaining));
   }
 
   function facadeTextures(THREE) {
@@ -698,5 +804,5 @@
     for(const surface of group.userData.weatherSurfaces) surface.roughness=weather?.rain ? 0.42 : 0.96;
   }
 
-  return { SITE, selectFeatures, buildingHeight, trafficRoutes, trafficPhase, flightProgress, flightIndex, flightPlan, flightPosition, contrailChance, flightLightState, FLIGHT, CONTRAIL, setAirplaneModel, create, populate, update, tick };
+  return { SITE, selectFeatures, buildingHeight, trafficRoutes, flightProgress, flightIndex, flightPlan, flightPosition, contrailChance, flightLightState, FLIGHT, CONTRAIL, setAirplaneModel, create, populate, update, tick };
 });

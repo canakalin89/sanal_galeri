@@ -245,6 +245,18 @@ bina sınırı ve malzemeye göre birleştirilmiş geometriler kullanılır.
 Yaklaşık 97 KB harita verisi yalnızca 3D açıldığında yerelden yüklenir.
 Kaynak, ODbL lisansı ve yeniden üretme bilgileri THIRD_PARTY_ASSETS.md içindedir.
 
+Dış trafik masaüstünde 16, mobilde 8 araçla gerçek yol bağlantılarını izler;
+minibüs, kamyon ve tır ağırlığı korunur. Araçlar takip mesafesini korur,
+kavşak ve dar dönüşlerde sırayla geçer, bekledikten sonra yeniden hızlanır.
+Rota başına tek eğri paylaşılır. Yeni tur görüş dışında başlar; kısa yolda
+yer kalmadıysa araçlar üst üste eklenmez, girişte boşluk bekler.
+Gece ön ve arka lambalar yanar; koni biçiminde ışık geometrisi kullanılmaz.
+
+Seyir irtifasındaki uçak ve varsa izi güncel sis, yağmur, kar, fırtına veya
+%85'ten fazla bulut örtüsünde birlikte gizlenir. Hava açılırsa aynı uçuşun
+rotası korunur; gizli iz de normal süresinde söner. Bulutlar gökyüzü yüzeyine
+çizildiği için tek tek bulutların uçağı örtmesi yerine genel hava koşulu kullanılır.
+
 `/api/weather`, sabit okul koordinatı için Open-Meteo'nun 15 dakikalık model
 verisini getirir; okulda ölçüm istasyonu veya canlı kamera bulunduğu anlamına
 gelmez. Veri saati ve kaynak 3D araç çubuğunda görünür. Ziyaretçinin konumu
